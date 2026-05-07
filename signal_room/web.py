@@ -56,6 +56,7 @@ def index(request: Request, q: str = "", lookback_days: int = 30) -> Any:
             "items": [],
             "source_counts": [],
             "date_groups": [],
+            "reference_groups": [],
             "worker_events": [],
         },
     )
@@ -195,6 +196,7 @@ def _run_payload(run_id: str) -> dict[str, Any]:
         "items": context["items"],
         "source_counts": context["source_counts"],
         "date_groups": context["date_groups"],
+        "reference_groups": context["reference_groups"],
         "worker_events": store.list_run_events(run_id),
         "suggestions": _query_suggestions(context["items"]),
     }
@@ -270,11 +272,25 @@ def _decorate_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def _result_context(items: list[dict[str, Any]]) -> dict[str, Any]:
     decorated = _decorate_items(items)
+    social_items = [item for item in decorated if _result_bucket(item) == "social"]
+    reference_items = [item for item in decorated if _result_bucket(item) == "reference"]
+    ordered_items = social_items + reference_items
     return {
-        "items": decorated,
-        "source_counts": _source_counts(decorated),
-        "date_groups": _date_groups(decorated),
+        "items": ordered_items,
+        "source_counts": _source_counts(ordered_items),
+        "date_groups": _date_groups(social_items),
+        "reference_groups": _date_groups(reference_items),
     }
+
+
+def _result_bucket(item: dict[str, Any]) -> str:
+    bucket = str(item.get("result_bucket", "")).strip().lower()
+    if bucket in {"social", "reference"}:
+        return bucket
+    source = str(item.get("display_source") or item.get("source") or "").lower()
+    if source in {"x", "instagram", "youtube", "reddit", "tiktok"}:
+        return "social"
+    return "reference"
 
 
 def _source_counts(items: list[dict[str, Any]]) -> list[dict[str, Any]]:

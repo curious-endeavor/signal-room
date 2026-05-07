@@ -8,11 +8,10 @@ from typing import Any
 
 from .fetchers.last30days import Last30DaysError, fetch_last30days
 from .ingest import load_raw_items
-from .pipeline import SOURCE_WEIGHTS_PATH
-from .query_lab import FEEDBACK_PATH, SEEDS_PATH, WEIGHTS_PATH
-from .scoring import score_items
-from .storage import DATA_DIR, read_json, read_jsonl
+from .query_lab import SEEDS_PATH
+from .storage import DATA_DIR, read_json
 from .title_enrichment import clean_result_titles
+from .traction import rank_items_by_traction
 from .web_store import SignalRoomStore
 
 
@@ -28,7 +27,7 @@ def process_run(store: SignalRoomStore, run: dict[str, Any], mock: bool = False)
     store.record_run_event(run_id, f"Worker picked up search: {query}", kind="running")
     try:
         fetch_summary = _fetch_sources(run_id, query, sources, lookback_days, mock, store)
-        store.record_run_event(run_id, "Scoring and ranking fetched results", kind="running", item_count=len(fetch_summary["items"]))
+        store.record_run_event(run_id, "Ranking fetched results by social traction", kind="running", item_count=len(fetch_summary["items"]))
         scored = _score_fetch_items(fetch_summary["items"])
         if scored:
             store.record_run_event(run_id, f"Cleaning titles for {len(scored)} results", kind="running", item_count=len(scored))
@@ -66,17 +65,8 @@ def run_forever(poll_seconds: int = 5) -> None:
 
 def _score_fetch_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     seed_payload = read_json(SEEDS_PATH, {"sources": []})
-    weights = read_json(WEIGHTS_PATH, {})
-    source_weights = read_json(SOURCE_WEIGHTS_PATH, {})
-    feedback_events = read_jsonl(FEEDBACK_PATH)
     raw_items = load_raw_items(seed_payload, [{"items": items}])
-    raw_by_id = {item.id: item.to_dict() for item in raw_items}
-    rows = []
-    for item in score_items(raw_items, weights, feedback_events, source_weights):
-        payload = dict(raw_by_id.get(item.id, {}))
-        payload.update(item.to_dict())
-        rows.append(payload)
-    return rows
+    return rank_items_by_traction(raw_items)
 
 
 def _fetch_sources(

@@ -10,11 +10,6 @@ function escapeHtml(value) {
     .replace(/'/g, "&#039;");
 }
 
-function formatScore(value) {
-  const score = Number(value || 0);
-  return Number.isFinite(score) ? String(Math.round(score)) : "0";
-}
-
 function sourceCountsMarkup(sourceCounts) {
   if (!Array.isArray(sourceCounts) || !sourceCounts.length) return "";
   return `<div class="source-counts" aria-label="Results by source">${
@@ -97,16 +92,13 @@ function resultRow(item, run) {
     <article class="result-row" data-item-id="${escapeHtml(item.id)}">
       <div class="result-topline">
         <a class="result-title" href="${escapeHtml(item.source_url)}" target="_blank" rel="noreferrer" ${item.original_title ? `title="${escapeHtml(item.original_title)}"` : ""}>${escapeHtml(item.title)}</a>
-        <span class="score">${formatScore(item.score)}</span>
       </div>
       <div class="source-line">
         <span>${escapeHtml(item.display_source || item.source || "Source")}</span>
         <span>${escapeHtml(item.display_date || item.date || "")}</span>
-        <span>${escapeHtml(item.pillar || "Unsorted")}</span>
         ${item.traction_label ? `<span>${escapeHtml(item.traction_label)}</span>` : ""}
       </div>
       <p class="summary">${item.summary_html || escapeHtml(item.summary_text || item.summary || "")}</p>
-      <p class="angle"><strong>CE angle</strong> ${escapeHtml(item.suggested_ce_angle || "")}</p>
       <div class="result-actions">
         <form class="js-action-form" action="/create-content" data-api-action="/api/create-content" method="post">
           <input type="hidden" name="run_id" value="${escapeHtml(run.id)}">
@@ -123,7 +115,16 @@ function resultRow(item, run) {
   `;
 }
 
-function renderResults(run, items, sourceCounts = [], dateGroups = [], workerEvents = []) {
+function resultGroupsMarkup(groups, run) {
+  return groups.map((group) => `
+    <section class="date-group" aria-label="${escapeHtml(group.label)}">
+      <h2 class="date-heading">${escapeHtml(group.label)}</h2>
+      ${(group.items || group.rows || []).map((item) => resultRow(item, run)).join("")}
+    </section>
+  `).join("");
+}
+
+function renderResults(run, items, sourceCounts = [], dateGroups = [], workerEvents = [], referenceGroups = []) {
   if (!resultsMount) return;
   resultsMount.hidden = false;
   resultsMount.dataset.runId = run.id || "";
@@ -151,7 +152,7 @@ function renderResults(run, items, sourceCounts = [], dateGroups = [], workerEve
   const pendingTitle = run.status === "queued" ? "Queued" : "Searching";
   const pendingMessage = run.status === "queued"
     ? "Waiting for the worker to pick this up."
-    : "Fetching sources and scoring results. All-source searches can take several minutes.";
+    : "Fetching sources and ranking results by social traction. All-source searches can take several minutes.";
   const pending = ["queued", "running"].includes(run.status || "")
     ? `
       <section class="pending-state">
@@ -164,13 +165,9 @@ function renderResults(run, items, sourceCounts = [], dateGroups = [], workerEve
     `
     : "";
   const workerWindow = workerWindowMarkup(run, workerEvents);
-  const groups = Array.isArray(dateGroups) && dateGroups.length ? dateGroups : dateGroupsFromItems(items);
-  const rows = groups.map((group) => `
-    <section class="date-group" aria-label="${escapeHtml(group.label)}">
-      <h2 class="date-heading">${escapeHtml(group.label)}</h2>
-      ${(group.items || group.rows || []).map((item) => resultRow(item, run)).join("")}
-    </section>
-  `).join("");
+  const groups = Array.isArray(dateGroups) ? dateGroups : dateGroupsFromItems(items);
+  const rows = resultGroupsMarkup(groups, run);
+  const referenceRows = Array.isArray(referenceGroups) && referenceGroups.length ? resultGroupsMarkup(referenceGroups, run) : "";
 
   resultsMount.innerHTML = `
     <section class="results-header">
@@ -185,7 +182,15 @@ function renderResults(run, items, sourceCounts = [], dateGroups = [], workerEve
     </section>
     ${pending}
     ${workerWindow}
-    <section class="results-list" aria-label="Search results">${rows}</section>
+    <section class="results-list" aria-label="Social traction results">
+      ${rows ? `<h2 class="result-section-title">Social traction</h2>${rows}` : ""}
+    </section>
+    ${referenceRows ? `
+      <section class="results-list references-list" aria-label="Reference results">
+        <h2 class="result-section-title">References</h2>
+        ${referenceRows}
+      </section>
+    ` : ""}
   `;
   scrollWorkerLogToBottom();
 }
@@ -205,7 +210,7 @@ async function pollRun(runId) {
     const payload = await response.json();
     attempts += 1;
     if (payload.ok) {
-      renderResults(payload.run, payload.items || [], payload.source_counts || [], payload.date_groups || [], payload.worker_events || []);
+      renderResults(payload.run, payload.items || [], payload.source_counts || [], payload.date_groups || [], payload.worker_events || [], payload.reference_groups || []);
       shouldContinue = ["queued", "running"].includes(payload.run.status || "");
       if (shouldContinue && attempts >= 160) {
         shouldContinue = false;
@@ -247,7 +252,7 @@ document.addEventListener("submit", async (event) => {
       const payload = await response.json();
       if (!payload.ok) throw new Error(payload.error || "Search failed");
       history.pushState({}, "", `/runs/${payload.run.id}`);
-      renderResults(payload.run, payload.items || [], payload.source_counts || [], payload.date_groups || [], payload.worker_events || []);
+      renderResults(payload.run, payload.items || [], payload.source_counts || [], payload.date_groups || [], payload.worker_events || [], payload.reference_groups || []);
       resultsMount?.scrollIntoView({ block: "nearest" });
       pollRun(payload.run.id);
     } catch (error) {
