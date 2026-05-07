@@ -10,4 +10,6 @@ if [ ! -d "$LAST30DAYS_DIR/scripts" ]; then
   git -C "$LAST30DAYS_DIR" checkout "$LAST30DAYS_REF"
 fi
 
+python -c 'from pathlib import Path; p=Path("vendor/last30days-skill/scripts/lib/env.py"); text=p.read_text(); needle="        ('\''APIFY_API_TOKEN'\'', None),\n"; replacement=needle+"        ('\''GITHUB_TOKEN'\'', None),\n"; p.write_text(text if "('\''GITHUB_TOKEN'\''" in text else text.replace(needle, replacement))'
+
 python -m pip install .
