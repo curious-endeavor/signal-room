@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=58"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "signal-room"
+version = "0.1.0"
+description = "Curious Endeavor Signal Room CLI"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+  "fastapi>=0.111,<1",
+  "jinja2>=3.1,<4",
+  "psycopg[binary]>=3.2,<4",
+  "python-multipart>=0.0.9,<1",
+  "requests>=2.32,<3",
+  "uvicorn[standard]>=0.30,<1",
+]
+
+[project.scripts]
+signal-room = "signal_room.cli:main"
+
+[tool.setuptools]
+packages = ["signal_room", "signal_room.fetchers"]

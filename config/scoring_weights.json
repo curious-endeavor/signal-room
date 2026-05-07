@@ -1,0 +1,13 @@
+{
+  "base_score": 20,
+  "candidate_source_penalty": -4,
+  "generic_penalty": -45,
+  "low_social_traction_penalty": -18,
+  "mechanism_keyword": 3,
+  "mechanism_present": 25,
+  "pillar_match": 9,
+  "search_discovery_bonus": 2,
+  "source_feedback_multiplier": 2,
+  "surf_match": 5,
+  "vendor_without_mechanism_penalty": -35
+}

@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Signal Room Search{% endblock %}
+{% block content %}
+<section class="search-home">
+  <form class="search-form js-search-form" action="/search" method="post">
+    <label class="visually-hidden" for="query">Search query</label>
+    <div class="search-box">
+      <input id="query" name="query" type="search" value="{{ query }}" placeholder="Search for CE signal..." autofocus>
+      <button type="submit">Search</button>
+    </div>
+    <div class="search-meta">
+      <label class="lookback-label">
+        <span>Number of days looking back</span>
+        <select name="lookback_days">
+          {% for days in lookback_options %}
+            <option value="{{ days }}" {% if days == lookback_days %}selected{% endif %}>{{ days }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <details>
+        <summary>Sources</summary>
+        <div class="source-list">
+          {% for source in sources %}
+            <label>
+              <input type="checkbox" name="sources" value="{{ source.id }}" {% if source.id in selected_sources %}checked{% endif %}>
+              {{ source.label }}
+            </label>
+          {% endfor %}
+        </div>
+      </details>
+    </div>
+  </form>
+
+  <section class="ajax-results" data-include-search="false" aria-live="polite" hidden>
+    {% include "partials/results_list.html" %}
+  </section>
+
+  <section class="suggestions" aria-label="Suggested queries">
+    <div class="section-label">Suggested queries</div>
+    {% for suggestion in suggestions %}
+      <article class="suggestion-row">
+        <a class="suggestion-query" href="/?q={{ suggestion.query | urlencode }}">{{ suggestion.query }}</a>
+        <p>{{ suggestion.why }}</p>
+        <form class="js-search-form" action="/search" method="post">
+          <input type="hidden" name="query" value="{{ suggestion.query }}">
+          <input type="hidden" name="lookback_days" value="{{ lookback_days }}">
+          <button class="text-button" type="submit">Run</button>
+        </form>
+      </article>
+    {% endfor %}
+  </section>
+
+  {% if recent_runs %}
+    <section class="recent-runs" aria-label="Recent runs">
+      <div class="section-label">Recent runs</div>
+      {% for run in recent_runs %}
+        <a class="run-link" href="/runs/{{ run.id }}">
+          <span>{{ run.query }}</span>
+          <small>{{ run.status }} · {{ run.item_count }} results</small>
+        </a>
+      {% endfor %}
+    </section>
+  {% endif %}
+</section>
+
+<script src="{{ url_for('static', path='app.js') }}?v=search-feedback-5"></script>
+{% endblock %}

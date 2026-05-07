@@ -1,0 +1,79 @@
+services:
+  - type: web
+    name: ce-signal-room-web
+    runtime: python
+    plan: starter
+    buildCommand: bash scripts/render-build.sh
+    startCommand: uvicorn signal_room.web:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: SIGNAL_ROOM_ENV
+        value: production
+      - key: SIGNAL_ROOM_KEEP_LAST30DAYS_ENV
+        value: "true"
+      - key: SIGNAL_ROOM_RUN_ROOT
+        value: /tmp/signal-room-runs
+      - key: LAST30DAYS_HOME
+        value: /opt/render/project/src/vendor/last30days-skill
+      - key: LAST30DAYS_X_BACKEND
+        value: xai
+      - key: INCLUDE_SOURCES
+        value: instagram,youtube_comments
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ce-signal-room-db
+          property: connectionString
+      - key: BRAVE_API_KEY
+        sync: false
+      - key: XAI_API_KEY
+        sync: false
+      - key: SCRAPECREATORS_API_KEY
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+
+  - type: worker
+    name: ce-signal-room-worker
+    runtime: python
+    plan: starter
+    buildCommand: bash scripts/render-build.sh
+    startCommand: python -m signal_room.worker
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: SIGNAL_ROOM_ENV
+        value: production
+      - key: SIGNAL_ROOM_KEEP_LAST30DAYS_ENV
+        value: "true"
+      - key: SIGNAL_ROOM_RUN_ROOT
+        value: /tmp/signal-room-runs
+      - key: LAST30DAYS_HOME
+        value: /opt/render/project/src/vendor/last30days-skill
+      - key: LAST30DAYS_X_BACKEND
+        value: xai
+      - key: INCLUDE_SOURCES
+        value: instagram,youtube_comments
+      - key: SIGNAL_ROOM_SOURCE_PARALLELISM
+        value: "4"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ce-signal-room-db
+          property: connectionString
+      - key: BRAVE_API_KEY
+        sync: false
+      - key: XAI_API_KEY
+        sync: false
+      - key: SCRAPECREATORS_API_KEY
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+
+databases:
+  - name: ce-signal-room-db
+    plan: basic-256mb

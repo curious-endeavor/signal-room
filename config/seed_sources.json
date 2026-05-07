@@ -1,0 +1,130 @@
+{
+  "sources": [
+    {
+      "name": "Lenny's Newsletter",
+      "category": "AI-native teams",
+      "url": "https://www.lennysnewsletter.com/",
+      "reason": "Product and growth operating models with useful workflow detail."
+    },
+    {
+      "name": "Every",
+      "category": "AI content and strategy",
+      "url": "https://every.to/",
+      "reason": "AI-native writing, business analysis, and operator-facing essays."
+    },
+    {
+      "name": "The Generalist",
+      "category": "AI company strategy",
+      "url": "https://www.generalist.com/",
+      "reason": "Deep company and market analysis useful for pitch references."
+    },
+    {
+      "name": "Ben's Bites",
+      "category": "AI discovery",
+      "url": "https://www.bensbites.co/",
+      "reason": "Broad AI discovery feed; needs filtering for mechanism-rich items."
+    },
+    {
+      "name": "Latent Space",
+      "category": "AI implementation",
+      "url": "https://www.latent.space/",
+      "reason": "Technical and organizational implementation details around AI systems."
+    },
+    {
+      "name": "Maggie Appleton",
+      "category": "AI design and interfaces",
+      "url": "https://maggieappleton.com/",
+      "reason": "Strong lens on AI interfaces, memory, cognition, and design."
+    },
+    {
+      "name": "Are.na",
+      "category": "Design research",
+      "url": "https://www.are.na/",
+      "reason": "Useful visual and cultural research trails."
+    },
+    {
+      "name": "Brand New",
+      "category": "Classic branding",
+      "url": "https://www.underconsideration.com/brandnew/",
+      "reason": "Canonical identity-design references for S2."
+    },
+    {
+      "name": "Eye on Design",
+      "category": "Design culture",
+      "url": "https://eyeondesign.aiga.org/",
+      "reason": "Design culture and brand signals beyond AI."
+    },
+    {
+      "name": "Fonts In Use",
+      "category": "Classic branding",
+      "url": "https://fontsinuse.com/",
+      "reason": "Typography references for brand and design arguments."
+    },
+    {
+      "name": "Reforge",
+      "category": "Marketing workflows",
+      "url": "https://www.reforge.com/",
+      "reason": "Frameworks for marketing, growth, and operating systems."
+    },
+    {
+      "name": "First Round Review",
+      "category": "Team transformation",
+      "url": "https://review.firstround.com/",
+      "reason": "Operator case studies and company-building mechanisms."
+    },
+    {
+      "name": "Decoder",
+      "category": "Business and tech strategy",
+      "url": "https://www.theverge.com/decoder-podcast-with-nilay-patel",
+      "reason": "Executive conversations about company operating models."
+    },
+    {
+      "name": "Ethan Mollick",
+      "category": "AI adoption",
+      "url": "https://www.oneusefulthing.org/",
+      "reason": "Practical AI adoption, education, and organizational experiments."
+    },
+    {
+      "name": "Gary Marcus",
+      "category": "AI skepticism and limits",
+      "url": "https://garymarcus.substack.com/",
+      "reason": "Useful counterweight for what AI should not do yet."
+    },
+    {
+      "name": "Hacker News",
+      "category": "AI discussion threads",
+      "url": "https://news.ycombinator.com/",
+      "reason": "Early operator reactions and technical failure modes."
+    },
+    {
+      "name": "Reddit AI threads",
+      "category": "AI discussion threads",
+      "url": "https://www.reddit.com/",
+      "reason": "A noisy but useful source for user pain and practitioner examples."
+    },
+    {
+      "name": "Agency case study pages",
+      "category": "Agency case studies",
+      "url": "",
+      "reason": "Direct references for how agencies explain AI, brand, and implementation work."
+    },
+    {
+      "name": "Cursor/Linear-style case studies",
+      "category": "AI-native company case studies",
+      "url": "",
+      "reason": "Examples of AI-native tools and operating models becoming brand narratives."
+    },
+    {
+      "name": "FT/NYT business design coverage",
+      "category": "Business design coverage",
+      "url": "",
+      "reason": "Mainstream market validation and pitch-friendly references."
+    },
+    {
+      "name": "Identity-design Substacks",
+      "category": "Classic branding",
+      "url": "",
+      "reason": "Independent design writing and brand references."
+    }
+  ]
+}

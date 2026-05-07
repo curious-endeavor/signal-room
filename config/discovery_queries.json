@@ -1,0 +1,41 @@
+{
+  "daily_query_limit": 6,
+  "queries": [
+    {
+      "id": "ai-native-marketing-agencies",
+      "priority": 1,
+      "topic": "AI-native marketing agency workflows",
+      "why": "Find agencies and operators showing how AI changes marketing delivery."
+    },
+    {
+      "id": "ai-cmo-smb",
+      "priority": 1,
+      "topic": "AI CMO for restaurants SMB marketing workflow",
+      "why": "Track CMO-as-software and productized marketing work."
+    },
+    {
+      "id": "hitl-marketing-review",
+      "priority": 1,
+      "topic": "human in the loop AI marketing review workflow failure modes",
+      "why": "Find concrete review, grading, and approval mechanisms."
+    },
+    {
+      "id": "ai-brand-system-case-studies",
+      "priority": 2,
+      "topic": "AI brand system case study agency design workflow",
+      "why": "Find AI-native brand-building examples."
+    },
+    {
+      "id": "ai-ready-workflows",
+      "priority": 2,
+      "topic": "marketing workflows AI ready not ready automation",
+      "why": "Feed the workflow-readiness pillar."
+    },
+    {
+      "id": "classic-branding-reference",
+      "priority": 3,
+      "topic": "new brand identity case study typography visual system",
+      "why": "Feed S2 classic branding references."
+    }
+  ]
+}

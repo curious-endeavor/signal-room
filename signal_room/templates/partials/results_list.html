@@ -1,0 +1,93 @@
+{% if run %}
+  <section class="results-header">
+    <form class="search-form compact js-search-form" action="/search" method="post">
+      <div class="search-box">
+        <input name="query" type="search" value="{{ run.query }}" aria-label="Search query">
+        <button type="submit">Search</button>
+      </div>
+      <div class="search-meta">
+        <label class="lookback-label">
+          <span>Number of days looking back</span>
+          <select name="lookback_days">
+            {% for days in lookback_options %}
+              <option value="{{ days }}" {% if days == run.lookback_days %}selected{% endif %}>{{ days }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+    </form>
+    <div class="run-meta">
+      <span>{{ run.lookback_days }} days</span>
+      <span>{{ run.item_count or items|length }} results</span>
+      {% if run.status in ["queued", "running", "failed"] %}<span>{{ run.status }}</span>{% endif %}
+    </div>
+    {% if source_counts %}
+      <div class="source-counts" aria-label="Results by source">
+        {% for row in source_counts %}
+          <span>{{ row.source }} {{ row.count }}</span>
+        {% endfor %}
+      </div>
+    {% endif %}
+    {% if run.error %}
+      <p class="error-text">{{ run.error }}</p>
+    {% endif %}
+  </section>
+{% endif %}
+
+{% if run and run.status in ["queued", "running"] %}
+  <section class="pending-state">
+    <div class="loading-row" aria-hidden="true">
+      <span class="spinner"></span>
+      <span class="loading-dots"><span></span><span></span><span></span></span>
+    </div>
+    {% if run.status == "queued" %}
+      <div>
+        <strong>Queued</strong>
+        <p>Waiting for the worker to pick this up.</p>
+      </div>
+    {% else %}
+      <div>
+        <strong>Searching</strong>
+        <p>Fetching sources and scoring results. All-source searches can take several minutes.</p>
+      </div>
+    {% endif %}
+  </section>
+{% endif %}
+
+<section class="results-list" aria-label="Search results">
+  {% for group in date_groups %}
+    <section class="date-group" aria-label="{{ group.label }}">
+      <h2 class="date-heading">{{ group.label }}</h2>
+      {% for item in group.rows %}
+        <article class="result-row" data-item-id="{{ item.id }}">
+          <div class="result-topline">
+            <a class="result-title" href="{{ item.source_url }}" target="_blank" rel="noreferrer">{{ item.title }}</a>
+            <span class="score">{{ "%.0f"|format(item.score) }}</span>
+          </div>
+          <div class="source-line">
+            <span>{{ item.display_source or item.source }}</span>
+            <span>{{ item.display_date or item.date }}</span>
+            <span>{{ item.pillar or (item.pillar_fit[0] if item.pillar_fit else "Unsorted") }}</span>
+            {% if item.traction_label %}
+              <span>{{ item.traction_label }}</span>
+            {% endif %}
+          </div>
+          <p class="summary">{{ item.summary_html | safe }}</p>
+          <p class="angle"><strong>CE angle</strong> {{ item.suggested_ce_angle }}</p>
+          <div class="result-actions">
+            <form class="js-action-form" action="/create-content" data-api-action="/api/create-content" method="post">
+              <input type="hidden" name="run_id" value="{{ run.id }}">
+              <input type="hidden" name="item_id" value="{{ item.id }}">
+              <button type="submit">Create Content</button>
+            </form>
+            <form class="js-action-form" action="/feedback" data-api-action="/api/feedback" method="post">
+              <input type="hidden" name="run_id" value="{{ run.id }}">
+              <input type="hidden" name="item_id" value="{{ item.id }}">
+              <button class="icon-button" type="submit" aria-label="Thumbs down">Thumbs down</button>
+            </form>
+          </div>
+        </article>
+      {% endfor %}
+    </section>
+  {% endfor %}
+</section>

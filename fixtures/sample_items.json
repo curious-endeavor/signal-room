@@ -1,0 +1,148 @@
+{
+  "items": [
+    {
+      "id": "owner-grader-cmo",
+      "title": "Owner/Grader positions an AI CMO for restaurants",
+      "source": "Owner/Grader",
+      "source_url": "https://example.com/owner-grader-ai-cmo-restaurants",
+      "date": "2026-05-04",
+      "summary": "A restaurant marketing workflow packages campaign planning, content drafts, local offers, and human approval into CMO-as-software for SMB operators.",
+      "content": "The useful mechanism is the owner/grader loop: AI proposes weekly content, promotions, and local campaign ideas; the restaurant owner grades fit, voice, and offer quality before anything ships. This productizes CMO work without pretending restaurants can fully automate judgment.",
+      "discovery_method": "search",
+      "candidate_source": true,
+      "tags": ["AI CMO", "restaurants", "SMB marketing", "human review", "content workflow"]
+    },
+    {
+      "id": "ramp-glass-coworker",
+      "title": "Ramp Glass says every employee gets an AI coworker",
+      "source": "Cursor/Linear-style case studies",
+      "source_url": "https://example.com/ramp-glass-ai-coworker",
+      "date": "2026-05-03",
+      "summary": "A company-wide AI coworker model turns memory, shared workflows, and internal infrastructure into a multiplayer operating layer.",
+      "content": "The signal is not the assistant. It is the operating model: shared memory, skills, workflow handoffs, permission boundaries, and human review points become internal infrastructure. This is AI-first company design rather than tool rollout.",
+      "discovery_method": "seed",
+      "candidate_source": false,
+      "tags": ["AI coworker", "team transformation", "workflow", "memory", "infrastructure"]
+    },
+    {
+      "id": "lab-consulting-arm",
+      "title": "AI labs validate verticalized service-company and consulting-arm models",
+      "source": "AI Business Coverage",
+      "source_url": "https://example.com/ai-labs-consulting-arms",
+      "date": "2026-05-02",
+      "summary": "AI labs increasingly sell implementation, workflow redesign, and forward-deployed expertise alongside model access.",
+      "content": "The mechanism is forward deployment: teams map workflows, build custom agents, train users, and create review/evaluation loops. For CE, this validates verticalized AI service companies where strategy, implementation, and taste are bundled.",
+      "discovery_method": "search",
+      "candidate_source": true,
+      "tags": ["consulting", "service company", "workflow redesign", "implementation", "agency"]
+    },
+    {
+      "id": "agency-ai-brand-system",
+      "title": "Agency case study shows AI-native brand system production",
+      "source": "Agency case study pages",
+      "source_url": "https://example.com/agency-ai-brand-system-case",
+      "date": "2026-05-02",
+      "summary": "A brand agency describes how strategists and designers used AI to explore voice territories, visual systems, and campaign variants.",
+      "content": "The useful detail is the handoff: human strategy defines constraints, AI creates divergent visual and copy territories, designers select and refine the system, and final judgment stays with the creative lead.",
+      "discovery_method": "seed",
+      "candidate_source": false,
+      "tags": ["brand", "design", "visual system", "case study", "human judgment"]
+    },
+    {
+      "id": "mollick-ai-adoption-loop",
+      "title": "Ethan Mollick argues teams need deliberate AI adoption loops",
+      "source": "Ethan Mollick",
+      "source_url": "https://example.com/ai-adoption-loop",
+      "date": "2026-05-01",
+      "summary": "A practical adoption pattern asks employees to experiment, document failures, and convert discoveries into team norms.",
+      "content": "The mechanism is a loop: individual experiments, shared examples, failure notes, managerial review, and team playbooks. This is directly relevant to turning a marketing team into AI-first.",
+      "discovery_method": "seed",
+      "candidate_source": false,
+      "tags": ["AI-first", "team", "playbook", "failure mode", "workflow"]
+    },
+    {
+      "id": "brand-new-fintech-identity",
+      "title": "A fintech identity system becomes a strong classic branding reference",
+      "source": "Brand New",
+      "source_url": "https://example.com/fintech-identity-system",
+      "date": "2026-04-30",
+      "summary": "A financial services brand uses typography, motion, and a disciplined identity system to make trust feel modern rather than cold.",
+      "content": "This is not an AI story, but it is useful S2 reference material. CE can use it in pitches as an example of classic brand craft and then bridge to how AI can help produce more territory exploration without replacing taste.",
+      "discovery_method": "seed",
+      "candidate_source": false,
+      "tags": ["classic branding", "identity", "typography", "financial service", "reference"]
+    },
+    {
+      "id": "generic-ai-change",
+      "title": "AI will change everything about marketing",
+      "source": "Ben's Bites",
+      "source_url": "https://example.com/ai-will-change-everything",
+      "date": "2026-05-04",
+      "summary": "A broad take says AI will revolutionize marketing and unlock productivity for every brand.",
+      "content": "The article has almost no case study, workflow, failure mode, or implementation detail.",
+      "discovery_method": "seed",
+      "candidate_source": false,
+      "tags": ["AI marketing", "generic"]
+    },
+    {
+      "id": "model-benchmark-no-angle",
+      "title": "New model tops benchmark leaderboard",
+      "source": "Model Benchmark Wire",
+      "source_url": "https://example.com/model-benchmark-leaderboard",
+      "date": "2026-05-04",
+      "summary": "A model announcement focuses on benchmark gains with no agency, brand, workflow, or marketing angle.",
+      "content": "The announcement is technically interesting but has no mechanism for marketing teams, content teams, agencies, or human-in-the-loop work.",
+      "discovery_method": "search",
+      "candidate_source": true,
+      "tags": ["benchmark", "model news"]
+    },
+    {
+      "id": "designer-ai-failure-modes",
+      "title": "Design team documents where AI should not touch brand approvals yet",
+      "source": "Maggie Appleton",
+      "source_url": "https://example.com/design-ai-failure-modes",
+      "date": "2026-04-29",
+      "summary": "A design team lists failure modes around brand approvals, image taste, legal review, and stakeholder alignment.",
+      "content": "The mechanism is a set of boundaries: AI may generate options, but humans approve brand fit, cultural risk, and final image selection. It is a strong P5 signal because it says where not to automate.",
+      "discovery_method": "seed",
+      "candidate_source": false,
+      "tags": ["design", "failure modes", "human-in-the-loop", "brand approval", "judgment"]
+    },
+    {
+      "id": "reforge-content-ops",
+      "title": "Reforge-style content ops map separates workflows that are AI-ready",
+      "source": "Reforge",
+      "source_url": "https://example.com/content-ops-ai-ready-workflows",
+      "date": "2026-04-28",
+      "summary": "A marketing ops guide separates research, brief writing, drafting, review, and publishing into different readiness levels.",
+      "content": "The mechanism is workflow decomposition. Research clustering and first drafts are ready for AI assistance; positioning calls and final voice approval remain human-led.",
+      "discovery_method": "seed",
+      "candidate_source": false,
+      "tags": ["workflow", "content ops", "AI-ready", "review", "marketing"]
+    },
+    {
+      "id": "reddit-ai-agency-thread",
+      "title": "Practitioners compare AI agency delivery workflows in a Reddit thread",
+      "source": "Reddit AI threads",
+      "source_url": "https://example.com/reddit-ai-agency-delivery-workflows",
+      "date": "2026-04-28",
+      "summary": "Agency operators compare discovery calls, prompt libraries, client review loops, and delivery quality issues.",
+      "content": "The thread is noisy, but the useful mechanism is repeated: agencies win when they build intake, review, and QA workflows instead of selling raw prompting.",
+      "discovery_method": "search",
+      "candidate_source": true,
+      "tags": ["agency", "workflow", "client review", "QA", "human judgment"]
+    },
+    {
+      "id": "fonts-in-use-brutalist",
+      "title": "Brutalist typography shows up across new cultural brands",
+      "source": "Fonts In Use",
+      "source_url": "https://example.com/brutalist-typography-cultural-brands",
+      "date": "2026-04-27",
+      "summary": "A design reference trail shows a move from thin expressive serifs toward heavier brutalist typography in cultural and youth brands.",
+      "content": "This is useful as a visual trend prompt. The CE angle is to ask whether AI-generated brand exploration is accelerating visible type trends or merely amplifying them.",
+      "discovery_method": "seed",
+      "candidate_source": false,
+      "tags": ["typography", "classic branding", "visual", "trend", "reference"]
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+.pycache/
+__pycache__/
+.uv-cache/
+.venv/
+.venvs/
+.env
+.env.*
+.DS_Store
+.pytest_cache/
+output/
+data/
+vendor/last30days-skill/
+*.pyc
+*.egg-info/
