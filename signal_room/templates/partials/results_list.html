@@ -54,6 +54,23 @@
   </section>
 {% endif %}
 
+{% if worker_events %}
+  <section class="worker-window" aria-label="Worker activity">
+    <div class="worker-window-top">
+      <span>Worker activity</span>
+      {% if run and run.status in ["queued", "running"] %}<span class="worker-live-dot">Live</span>{% endif %}
+    </div>
+    <div class="worker-log">
+      {% for event in worker_events %}
+        <div class="worker-event is-{{ event.kind }}">
+          <span class="worker-prompt">&gt;</span>
+          <span>{{ event.message }}</span>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+{% endif %}
+
 <section class="results-list" aria-label="Search results">
   {% for group in date_groups %}
     <section class="date-group" aria-label="{{ group.label }}">

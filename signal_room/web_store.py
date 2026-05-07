@@ -72,6 +72,34 @@ class SignalRoomStore:
             (status, error, item_count, _now(), run_id),
         )
 
+    def record_run_event(
+        self,
+        run_id: str,
+        message: str,
+        kind: str = "info",
+        source: str = "",
+        item_count: int = 0,
+    ) -> None:
+        self.execute(
+            """
+            insert into run_events (run_id, kind, source, message, item_count, created_at)
+            values (?, ?, ?, ?, ?, ?)
+            """,
+            (run_id, kind, source, message, item_count, _now()),
+        )
+
+    def list_run_events(self, run_id: str, limit: int = 40) -> list[dict[str, Any]]:
+        rows = self.fetchall(
+            """
+            select * from run_events
+            where run_id = ?
+            order by id desc
+            limit ?
+            """,
+            (run_id, limit),
+        )
+        return [_decode_event(row) for row in reversed(rows)]
+
     def replace_run_items(self, run_id: str, items: list[dict[str, Any]]) -> None:
         with self.transaction() as conn:
             self._execute_conn(conn, "delete from items where run_id = ?", (run_id,))
@@ -230,6 +258,17 @@ def _schema_sql(id_type: str) -> list[str]:
           created_at text not null
         )
         """,
+        f"""
+        create table if not exists run_events (
+          id {id_type},
+          run_id text not null,
+          kind text not null,
+          source text not null default '',
+          message text not null,
+          item_count integer not null default 0,
+          created_at text not null
+        )
+        """,
     ]
 
 
@@ -272,6 +311,12 @@ def _decode_item(row: dict[str, Any]) -> dict[str, Any]:
         }
     )
     return payload
+
+
+def _decode_event(row: dict[str, Any]) -> dict[str, Any]:
+    event = dict(row)
+    event["item_count"] = int(event.get("item_count") or 0)
+    return event
 
 
 def _primary_pillar(item: dict[str, Any]) -> str:

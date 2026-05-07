@@ -22,6 +22,27 @@ function sourceCountsMarkup(sourceCounts) {
   }</div>`;
 }
 
+function workerWindowMarkup(run, events = []) {
+  if (!Array.isArray(events) || !events.length) return "";
+  const live = ["queued", "running"].includes(run.status || "") ? `<span class="worker-live-dot">Live</span>` : "";
+  return `
+    <section class="worker-window" aria-label="Worker activity">
+      <div class="worker-window-top">
+        <span>Worker activity</span>
+        ${live}
+      </div>
+      <div class="worker-log">
+        ${events.map((event) => `
+          <div class="worker-event is-${escapeHtml(event.kind || "info")}">
+            <span class="worker-prompt">&gt;</span>
+            <span>${escapeHtml(event.message || "")}</span>
+          </div>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
 function setFormBusy(form, busy, label = "Search") {
   const submitButton = form.querySelector("button[type='submit']");
   if (!submitButton) return;
@@ -102,7 +123,7 @@ function resultRow(item, run) {
   `;
 }
 
-function renderResults(run, items, sourceCounts = [], dateGroups = []) {
+function renderResults(run, items, sourceCounts = [], dateGroups = [], workerEvents = []) {
   if (!resultsMount) return;
   resultsMount.hidden = false;
   resultsMount.dataset.runId = run.id || "";
@@ -142,6 +163,7 @@ function renderResults(run, items, sourceCounts = [], dateGroups = []) {
       </section>
     `
     : "";
+  const workerWindow = workerWindowMarkup(run, workerEvents);
   const groups = Array.isArray(dateGroups) && dateGroups.length ? dateGroups : dateGroupsFromItems(items);
   const rows = groups.map((group) => `
     <section class="date-group" aria-label="${escapeHtml(group.label)}">
@@ -162,6 +184,7 @@ function renderResults(run, items, sourceCounts = [], dateGroups = []) {
       ${error}
     </section>
     ${pending}
+    ${workerWindow}
     <section class="results-list" aria-label="Search results">${rows}</section>
   `;
 }
@@ -175,7 +198,7 @@ async function pollRun(runId) {
     const payload = await response.json();
     attempts += 1;
     if (payload.ok) {
-      renderResults(payload.run, payload.items || [], payload.source_counts || [], payload.date_groups || []);
+      renderResults(payload.run, payload.items || [], payload.source_counts || [], payload.date_groups || [], payload.worker_events || []);
       shouldContinue = ["queued", "running"].includes(payload.run.status || "");
       if (shouldContinue && attempts >= 160) {
         shouldContinue = false;
@@ -217,7 +240,7 @@ document.addEventListener("submit", async (event) => {
       const payload = await response.json();
       if (!payload.ok) throw new Error(payload.error || "Search failed");
       history.pushState({}, "", `/runs/${payload.run.id}`);
-      renderResults(payload.run, payload.items || [], payload.source_counts || [], payload.date_groups || []);
+      renderResults(payload.run, payload.items || [], payload.source_counts || [], payload.date_groups || [], payload.worker_events || []);
       resultsMount?.scrollIntoView({ block: "nearest" });
       pollRun(payload.run.id);
     } catch (error) {

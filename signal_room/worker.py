@@ -24,18 +24,24 @@ def process_run(store: SignalRoomStore, run: dict[str, Any], mock: bool = False)
     sources = list(run.get("sources") or DEFAULT_SOURCES)
     lookback_days = int(run.get("lookback_days") or 30)
     store.mark_run_status(run_id, "running")
+    store.record_run_event(run_id, f"Worker picked up search: {query}", kind="running")
     try:
         fetch_summary = _fetch_sources(run_id, query, sources, lookback_days, mock, store)
+        store.record_run_event(run_id, "Scoring and ranking fetched results", kind="running", item_count=len(fetch_summary["items"]))
         scored = _score_fetch_items(fetch_summary["items"])
         store.replace_run_items(run_id, scored)
         if scored:
             store.mark_run_status(run_id, "complete", error=_error_text(fetch_summary["errors"]), item_count=len(scored))
+            store.record_run_event(run_id, f"Search complete with {len(scored)} scored results", kind="complete", item_count=len(scored))
         elif fetch_summary["errors"]:
             store.mark_run_status(run_id, "failed", error=_error_text(fetch_summary["errors"]))
+            store.record_run_event(run_id, "Search failed before any results were found", kind="error")
         else:
             store.mark_run_status(run_id, "complete", item_count=0)
+            store.record_run_event(run_id, "Search complete with no results", kind="complete")
     except Exception as exc:
         store.mark_run_status(run_id, "failed", error=str(exc))
+        store.record_run_event(run_id, f"Worker failed: {exc}", kind="error")
 
 
 def run_forever(poll_seconds: int = 5) -> None:
@@ -75,14 +81,16 @@ def _fetch_sources(
 ) -> dict[str, Any]:
     if len(sources) <= 1:
         source = sources[0] if sources else "default"
+        store.record_run_event(run_id, f"Searching {source}", kind="running", source=source)
         return _fetch_one_source(run_id, query, source, lookback_days, mock)
 
     items: list[dict[str, Any]] = []
     errors: list[dict[str, str]] = []
     max_workers = _source_parallelism(len(sources))
+    store.record_run_event(run_id, f"Starting {len(sources)} sources with {max_workers} workers", kind="running")
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_map = {
-            executor.submit(_fetch_one_source, run_id, query, source, lookback_days, mock): source
+            executor.submit(_fetch_one_source_with_progress, store, run_id, query, source, lookback_days, mock): source
             for source in sources
         }
         for future in as_completed(future_map):
@@ -91,13 +99,44 @@ def _fetch_sources(
                 summary = future.result()
             except Exception as exc:
                 errors.append({"source": source, "error": str(exc)})
+                store.record_run_event(run_id, f"{source} failed: {exc}", kind="error", source=source)
                 continue
-            items.extend(summary.get("items", []))
-            errors.extend(summary.get("errors", []))
+            source_items = summary.get("items", [])
+            source_errors = summary.get("errors", [])
+            items.extend(source_items)
+            errors.extend(source_errors)
             scored = _score_fetch_items(items)
             store.replace_run_items(run_id, scored)
             store.mark_run_status(run_id, "running", error=_error_text(errors), item_count=len(scored))
+            if source_errors:
+                store.record_run_event(
+                    run_id,
+                    f"{source} returned {len(source_items)} items with a warning",
+                    kind="warning",
+                    source=source,
+                    item_count=len(source_items),
+                )
+            else:
+                store.record_run_event(
+                    run_id,
+                    f"{source} returned {len(source_items)} items",
+                    kind="complete",
+                    source=source,
+                    item_count=len(source_items),
+                )
     return {"items": items, "errors": errors}
+
+
+def _fetch_one_source_with_progress(
+    store: SignalRoomStore,
+    run_id: str,
+    query: str,
+    source: str,
+    lookback_days: int,
+    mock: bool,
+) -> dict[str, Any]:
+    store.record_run_event(run_id, f"Searching {source}", kind="running", source=source)
+    return _fetch_one_source(run_id, query, source, lookback_days, mock)
 
 
 def _fetch_one_source(

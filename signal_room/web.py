@@ -56,6 +56,7 @@ def index(request: Request, q: str = "", lookback_days: int = 30) -> Any:
             "items": [],
             "source_counts": [],
             "date_groups": [],
+            "worker_events": [],
         },
     )
 
@@ -93,6 +94,7 @@ def results(request: Request, run_id: str) -> Any:
         {
             "run": run,
             **_result_context(items),
+            "worker_events": store.list_run_events(run_id),
             "suggestions": _query_suggestions(items),
             "lookback_options": _lookback_options(),
         },
@@ -116,6 +118,7 @@ def sample_results(request: Request) -> Any:
                 "error": "",
             },
             **_result_context(items),
+            "worker_events": [],
             "suggestions": _query_suggestions(items),
             "lookback_options": _lookback_options(),
         },
@@ -192,6 +195,7 @@ def _run_payload(run_id: str) -> dict[str, Any]:
         "items": context["items"],
         "source_counts": context["source_counts"],
         "date_groups": context["date_groups"],
+        "worker_events": store.list_run_events(run_id),
         "suggestions": _query_suggestions(context["items"]),
     }
 

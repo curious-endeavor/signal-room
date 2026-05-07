@@ -459,6 +459,76 @@ details summary {
   animation-delay: 0.3s;
 }
 
+.worker-window {
+  max-width: 840px;
+  margin: var(--s-4) 0 var(--s-5);
+  border: 1px solid var(--ce-black);
+  color: #fff;
+  background: var(--ce-black);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.worker-window-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.22);
+  color: rgba(255, 255, 255, 0.76);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.worker-live-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #fff;
+}
+
+.worker-live-dot::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ce-red);
+  animation: pulse-dot 1s ease-in-out infinite;
+}
+
+.worker-log {
+  display: grid;
+  gap: 3px;
+  max-height: 220px;
+  overflow: auto;
+  padding: 10px;
+}
+
+.worker-event {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.worker-event.is-complete {
+  color: #dff7df;
+}
+
+.worker-event.is-warning {
+  color: #ffe4a8;
+}
+
+.worker-event.is-error {
+  color: #ffb3b3;
+}
+
+.worker-prompt {
+  color: var(--ce-red);
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
