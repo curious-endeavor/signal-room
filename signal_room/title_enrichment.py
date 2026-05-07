@@ -10,6 +10,45 @@ import requests
 
 DEFAULT_MODEL = "gpt-4.1-mini"
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
+STOPWORDS = {
+    "about",
+    "after",
+    "again",
+    "against",
+    "also",
+    "and",
+    "are",
+    "but",
+    "for",
+    "from",
+    "has",
+    "have",
+    "how",
+    "into",
+    "its",
+    "more",
+    "new",
+    "not",
+    "now",
+    "of",
+    "on",
+    "or",
+    "our",
+    "that",
+    "the",
+    "their",
+    "this",
+    "through",
+    "to",
+    "use",
+    "using",
+    "what",
+    "when",
+    "where",
+    "which",
+    "with",
+    "your",
+}
 
 
 class TitleEnrichmentError(RuntimeError):
@@ -32,14 +71,22 @@ def clean_result_titles(items: list[dict[str, Any]]) -> tuple[list[dict[str, Any
         return _with_original_titles(items), f"Title cleanup skipped: {exc}"
 
     cleaned = []
+    accepted_count = 0
     for item in items:
         row = dict(item)
         original_title = str(row.get("original_title") or row.get("title") or "").strip()
         row["original_title"] = original_title
         proposed_title = _clean_title_value(title_map.get(str(row.get("id", ""))))
-        if proposed_title:
+        if proposed_title and _title_is_grounded(
+            original_title,
+            str(row.get("summary", "")),
+            proposed_title,
+        ):
             row["title"] = proposed_title
+            accepted_count += 1
         cleaned.append(row)
+    if accepted_count == 0 and title_map:
+        return cleaned, "Title cleanup skipped: OpenAI titles were not grounded in source text"
     return cleaned, ""
 
 
@@ -75,6 +122,7 @@ def _request_clean_titles(api_key: str, items: list[dict[str, Any]]) -> dict[str
                                         "id": str(item.get("id", "")),
                                         "title": str(item.get("title", ""))[:500],
                                         "source": str(item.get("source", ""))[:120],
+                                        "source_url": str(item.get("source_url", ""))[:300],
                                         "summary": str(item.get("summary", ""))[:400],
                                     }
                                     for item in items
@@ -162,6 +210,23 @@ def _clean_title_value(value: Any) -> str:
     if len(title) < 4:
         return ""
     return title[:160]
+
+
+def _title_is_grounded(original_title: str, summary: str, proposed_title: str) -> bool:
+    source_tokens = _significant_tokens(f"{original_title} {summary}")
+    proposed_tokens = _significant_tokens(proposed_title)
+    if not source_tokens or not proposed_tokens:
+        return False
+    return bool(source_tokens & proposed_tokens)
+
+
+def _significant_tokens(text: str) -> set[str]:
+    tokens = set()
+    for token in re.findall(r"[A-Za-z0-9][A-Za-z0-9'-]{2,}", text.lower()):
+        normalized = token.strip("'")
+        if normalized and normalized not in STOPWORDS:
+            tokens.add(normalized)
+    return tokens
 
 
 def _with_original_titles(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
