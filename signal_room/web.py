@@ -42,9 +42,9 @@ def healthz() -> dict[str, bool]:
 @app.get("/")
 def index(request: Request, q: str = "", lookback_days: int = 30) -> Any:
     return templates.TemplateResponse(
+        request,
         "index.html",
         {
-            "request": request,
             "query": q,
             "lookback_days": lookback_days,
             "lookback_options": _lookback_options(),
@@ -88,9 +88,9 @@ def results(request: Request, run_id: str) -> Any:
         return RedirectResponse("/sample", status_code=303)
     items = store.get_run_items(run_id)
     return templates.TemplateResponse(
+        request,
         "results.html",
         {
-            "request": request,
             "run": run,
             **_result_context(items),
             "suggestions": _query_suggestions(items),
@@ -103,9 +103,9 @@ def results(request: Request, run_id: str) -> Any:
 def sample_results(request: Request) -> Any:
     items = _demo_items()
     return templates.TemplateResponse(
+        request,
         "results.html",
         {
-            "request": request,
             "run": {
                 "id": "sample",
                 "query": "ai-native marketing agency workflow",
