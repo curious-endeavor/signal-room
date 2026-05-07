@@ -11,4 +11,3 @@ if [ ! -d "$LAST30DAYS_DIR/scripts" ]; then
 fi
 
 python -m pip install .
-python -m pip install "$LAST30DAYS_DIR"
