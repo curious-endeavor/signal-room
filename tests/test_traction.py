@@ -85,6 +85,28 @@ class TractionRankingTest(unittest.TestCase):
         self.assertEqual(context["date_groups"][0]["rows"][0]["id"], "x")
         self.assertEqual(context["reference_groups"][0]["rows"][0]["id"], "web")
 
+    def test_date_groups_order_rows_by_traction(self):
+        rows = [
+            {
+                **item("low", "Low traction", "x", {"likes": 1}, date="2026-05-07").to_dict(),
+                "result_bucket": "social",
+                "traction_score": 1,
+                "score": 1,
+                "rank": 1,
+            },
+            {
+                **item("high", "High traction", "x", {"likes": 50}, date="2026-05-07").to_dict(),
+                "result_bucket": "social",
+                "traction_score": 50,
+                "score": 50,
+                "rank": 2,
+            },
+        ]
+
+        context = _result_context(rows)
+
+        self.assertEqual([row["id"] for row in context["date_groups"][0]["rows"]], ["high", "low"])
+
 
 if __name__ == "__main__":
     unittest.main()

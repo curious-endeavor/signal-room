@@ -302,12 +302,35 @@ def _date_groups(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     groups: "OrderedDict[str, list[dict[str, Any]]]" = OrderedDict()
     for item in items:
         groups.setdefault(str(item.get("date_group") or "Earlier"), []).append(item)
+    for rows in groups.values():
+        rows.sort(key=_group_row_sort_key)
     ordered_labels = ["Today", "Yesterday", "This week", "Last week", "Earlier this month", "Older", "Unknown date"]
     ordered_groups = [{"label": label, "rows": groups[label]} for label in ordered_labels if label in groups]
     ordered_groups.extend(
         {"label": label, "rows": rows} for label, rows in groups.items() if label not in ordered_labels
     )
     return ordered_groups
+
+
+def _group_row_sort_key(item: dict[str, Any]) -> tuple[float, float, int, str]:
+    rank = item.get("rank")
+    try:
+        normalized_rank = int(rank)
+    except (TypeError, ValueError):
+        normalized_rank = 1_000_000
+    return (
+        -_float_value(item.get("traction_score")),
+        -_float_value(item.get("score")),
+        normalized_rank,
+        str(item.get("title", "")),
+    )
+
+
+def _float_value(value: Any) -> float:
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _display_source(item: dict[str, Any]) -> str:
