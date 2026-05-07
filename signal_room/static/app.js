@@ -187,6 +187,13 @@ function renderResults(run, items, sourceCounts = [], dateGroups = [], workerEve
     ${workerWindow}
     <section class="results-list" aria-label="Search results">${rows}</section>
   `;
+  scrollWorkerLogToBottom();
+}
+
+function scrollWorkerLogToBottom() {
+  const log = resultsMount?.querySelector(".worker-log");
+  if (!log) return;
+  log.scrollTop = log.scrollHeight;
 }
 
 async function pollRun(runId) {
