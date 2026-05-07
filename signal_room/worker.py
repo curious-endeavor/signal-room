@@ -12,6 +12,7 @@ from .pipeline import SOURCE_WEIGHTS_PATH
 from .query_lab import FEEDBACK_PATH, SEEDS_PATH, WEIGHTS_PATH
 from .scoring import score_items
 from .storage import DATA_DIR, read_json, read_jsonl
+from .title_enrichment import clean_result_titles
 from .web_store import SignalRoomStore
 
 
@@ -29,6 +30,13 @@ def process_run(store: SignalRoomStore, run: dict[str, Any], mock: bool = False)
         fetch_summary = _fetch_sources(run_id, query, sources, lookback_days, mock, store)
         store.record_run_event(run_id, "Scoring and ranking fetched results", kind="running", item_count=len(fetch_summary["items"]))
         scored = _score_fetch_items(fetch_summary["items"])
+        if scored:
+            store.record_run_event(run_id, f"Cleaning titles for {len(scored)} results", kind="running", item_count=len(scored))
+            scored, title_warning = clean_result_titles(scored)
+            if title_warning:
+                store.record_run_event(run_id, title_warning, kind="warning", item_count=len(scored))
+            else:
+                store.record_run_event(run_id, f"Cleaned titles for {len(scored)} results", kind="complete", item_count=len(scored))
         store.replace_run_items(run_id, scored)
         if scored:
             store.mark_run_status(run_id, "complete", error=_error_text(fetch_summary["errors"]), item_count=len(scored))

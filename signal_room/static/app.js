@@ -96,7 +96,7 @@ function resultRow(item, run) {
   return `
     <article class="result-row" data-item-id="${escapeHtml(item.id)}">
       <div class="result-topline">
-        <a class="result-title" href="${escapeHtml(item.source_url)}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a>
+        <a class="result-title" href="${escapeHtml(item.source_url)}" target="_blank" rel="noreferrer" ${item.original_title ? `title="${escapeHtml(item.original_title)}"` : ""}>${escapeHtml(item.title)}</a>
         <span class="score">${formatScore(item.score)}</span>
       </div>
       <div class="source-line">

@@ -78,7 +78,7 @@
       {% for item in group.rows %}
         <article class="result-row" data-item-id="{{ item.id }}">
           <div class="result-topline">
-            <a class="result-title" href="{{ item.source_url }}" target="_blank" rel="noreferrer">{{ item.title }}</a>
+            <a class="result-title" href="{{ item.source_url }}" target="_blank" rel="noreferrer" {% if item.original_title %}title="{{ item.original_title }}"{% endif %}>{{ item.title }}</a>
             <span class="score">{{ "%.0f"|format(item.score) }}</span>
           </div>
           <div class="source-line">
