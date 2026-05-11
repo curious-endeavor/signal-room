@@ -7,6 +7,7 @@ from .ingest import load_raw_items, source_candidates
 from .fetchers.last30days import DISCOVERED_ITEMS_PATH, fetch_last30days
 from .models import ScoredItem
 from .scoring import score_items
+from .llm_scoring import score_items_with_brief
 from .storage import (
     CONFIG_DIR,
     DATA_DIR,
@@ -38,6 +39,8 @@ def run_pipeline(
     fetch_mock: bool = False,
     fetch_query_limit: int = 0,
     fetch_lookback_days: int = 0,
+    brief_path: Path = None,
+    llm_model: str = "claude-sonnet-4-6",
 ) -> Dict[str, Any]:
     ensure_dirs()
     seed_payload = read_json(SEEDS_PATH, {"sources": []})
@@ -54,7 +57,10 @@ def run_pipeline(
     feedback_events = read_jsonl(FEEDBACK_PATH)
 
     raw_items = load_raw_items(seed_payload, [fixture_payload, discovered_payload])
-    scored_items = score_items(raw_items, weights, feedback_events, source_weights)
+    if brief_path:
+        scored_items = score_items_with_brief(raw_items, brief_path, model=llm_model)
+    else:
+        scored_items = score_items(raw_items, weights, feedback_events, source_weights)
     top_items = scored_items[:limit]
     digest_path = OUTPUT_DIR / f"signal-room-digest-{date.today().isoformat()}.html"
 

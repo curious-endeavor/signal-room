@@ -36,6 +36,8 @@ def main(argv: Sequence[str] = None) -> int:
         help="Ignore discovered items and build the digest from fixtures only",
     )
     run_parser.add_argument("--emit", choices=["text", "json"], default="text")
+    run_parser.add_argument("--brief", type=Path, default=None, help="Path to brief.yaml — switches to LLM-based scoring")
+    run_parser.add_argument("--llm-model", default="claude-sonnet-4-6", help="Model for LLM scoring")
 
     fetch_parser = subparsers.add_parser("fetch", help="Fetch discovery items from a backend")
     fetch_parser.add_argument("--backend", choices=["last30days"], required=True)
@@ -97,6 +99,9 @@ def main(argv: Sequence[str] = None) -> int:
         }
         if args.fixture:
             run_kwargs["fixture_path"] = args.fixture
+        if getattr(args, "brief", None):
+            run_kwargs["brief_path"] = args.brief
+            run_kwargs["llm_model"] = args.llm_model
         summary = run_pipeline(**run_kwargs)
         _emit(summary, args.emit, "Signal Room digest generated")
         return 0
