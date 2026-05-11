@@ -1,0 +1,46 @@
+{
+  "sources": [
+    {
+      "name": "clutch.co",
+      "category": "uncategorized",
+      "url": "https://clutch.co/agencies/branding",
+      "reason": ""
+    },
+    {
+      "name": "salaryexpert.com",
+      "category": "uncategorized",
+      "url": "https://www.salaryexpert.com",
+      "reason": ""
+    },
+    {
+      "name": "deel.com",
+      "category": "uncategorized",
+      "url": "https://www.deel.com/employer-of-record/germany",
+      "reason": ""
+    },
+    {
+      "name": "yunojuno.com",
+      "category": "uncategorized",
+      "url": "https://yunojuno.com/freelancer-rates",
+      "reason": ""
+    },
+    {
+      "name": "o-cmo.com",
+      "category": "uncategorized",
+      "url": "https://o-cmo.com",
+      "reason": ""
+    },
+    {
+      "name": "anthropic.com",
+      "category": "uncategorized",
+      "url": "https://anthropic.com",
+      "reason": ""
+    },
+    {
+      "name": "deepmind.google",
+      "category": "uncategorized",
+      "url": "https://deepmind.google/technologies/gemini",
+      "reason": ""
+    }
+  ]
+}

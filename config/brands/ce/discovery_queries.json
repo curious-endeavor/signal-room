@@ -1,0 +1,53 @@
+{
+  "daily_query_limit": 6,
+  "queries": [
+    {
+      "id": "agency-vs-inhouse-europe",
+      "priority": 1,
+      "topic": "agency retainer vs in-house brand team cost Europe 2025 2026",
+      "why": "Core displacement argument in CE pricing \u2014 monitor for new data that updates or challenges the CFO comparison tables."
+    },
+    {
+      "id": "ai-brand-studio-category",
+      "priority": 1,
+      "topic": "AI-native brand studio OR AI brand agency Europe",
+      "why": "CE is trying to own this category label \u2014 track who else is claiming it and how the term is evolving."
+    },
+    {
+      "id": "fractional-cmo-europe",
+      "priority": 1,
+      "topic": "fractional CMO Europe pricing 2025 2026 OR fractional brand director",
+      "why": "Direct adjacent competitor set named in CE pricing; monitor for rate changes and positioning shifts."
+    },
+    {
+      "id": "eu-ai-act-marketing-compliance",
+      "priority": 2,
+      "topic": "EU AI Act compliance marketing agency deployer Article 3 2025 2026",
+      "why": "CE publishes EU AI Act compliance as a trust differentiator \u2014 monitor regulatory discourse and competitor compliance claims."
+    },
+    {
+      "id": "make-run-model-brand",
+      "priority": 2,
+      "topic": "brand strategy execution model one-time setup monthly retainer cap",
+      "why": "Track whether the Make\u00b7Run two-line-item model is being adopted or imitated by competitors."
+    },
+    {
+      "id": "signal-room-market-intelligence",
+      "priority": 2,
+      "topic": "brand market intelligence weekly report Reddit X LinkedIn monitoring tool",
+      "why": "Signal Room is CE's flagship Run product \u2014 track competing tools and buyer language around always-on brand listening."
+    },
+    {
+      "id": "clutch-agency-pricing-europe",
+      "priority": 3,
+      "topic": "Clutch branding agency pricing Europe 2025 2026 average retainer",
+      "why": "CE's cost comparison is anchored to Clutch data \u2014 track updates to maintain accuracy of the CFO scenario tables."
+    },
+    {
+      "id": "plant-based-fat-b2b-ingredient",
+      "priority": 3,
+      "topic": "precision fermentation dairy fat ingredient B2B brand positioning 2025 2026",
+      "why": "Olevia is CE's showcase case study \u2014 monitor category discourse to surface future similar client archetypes."
+    }
+  ]
+}
