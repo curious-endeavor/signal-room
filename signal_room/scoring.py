@@ -1,66 +1,39 @@
+import json as _json
 from collections import Counter, defaultdict
 from typing import Any, Dict, Iterable, List, Tuple
 
 from .models import RawItem, ScoredItem
 
 
-PILLAR_KEYWORDS: Dict[str, Tuple[str, ...]] = {
-    "P1": (
-        "content",
-        "post",
-        "campaign",
-        "copy",
-        "editorial",
-        "creative",
-        "social",
-        "marketing",
-        "cmo",
-    ),
-    "P2": (
-        "design",
-        "brand",
-        "identity",
-        "visual",
-        "voice",
-        "figma",
-        "font",
-        "system",
-        "prototype",
-    ),
-    "P3": (
-        "team",
-        "company",
-        "employee",
-        "organization",
-        "agency",
-        "ai-first",
-        "coworker",
-        "service company",
-        "consulting",
-    ),
-    "P4": (
-        "workflow",
-        "process",
-        "ready",
-        "handoff",
-        "implementation",
-        "operations",
-        "infrastructure",
-        "automation",
-        "deploy",
-    ),
-    "P5": (
-        "human",
-        "review",
-        "judgment",
-        "grader",
-        "failure",
-        "quality",
-        "approval",
-        "risk",
-        "evaluation",
-    ),
+_DEFAULT_PILLAR_KEYWORDS: Dict[str, Tuple[str, ...]] = {
+    "P1": ("content", "post", "campaign", "copy", "editorial", "creative", "social", "marketing", "cmo"),
+    "P2": ("design", "brand", "identity", "visual", "voice", "figma", "font", "system", "prototype"),
+    "P3": ("team", "company", "employee", "organization", "agency", "ai-first", "coworker", "service company", "consulting"),
+    "P4": ("workflow", "process", "ready", "handoff", "implementation", "operations", "infrastructure", "automation", "deploy"),
+    "P5": ("human", "review", "judgment", "grader", "failure", "quality", "approval", "risk", "evaluation"),
 }
+
+
+def _load_pillar_keywords() -> Dict[str, Tuple[str, ...]]:
+    """Load pillar keywords from config/pillar_keywords.json if present.
+
+    Falls back to hardcoded CE defaults. Lets a brand-audit projector
+    override pillars per brand without touching this file.
+    """
+    try:
+        from .storage import CONFIG_DIR
+        path = CONFIG_DIR / "pillar_keywords.json"
+        if path.exists():
+            data = _json.loads(path.read_text(encoding="utf-8"))
+            loaded = {k: tuple(v) for k, v in data.items() if isinstance(v, (list, tuple))}
+            if loaded:
+                return loaded
+    except Exception:
+        pass
+    return _DEFAULT_PILLAR_KEYWORDS
+
+
+PILLAR_KEYWORDS: Dict[str, Tuple[str, ...]] = _load_pillar_keywords()
 
 SURF_KEYWORDS: Dict[str, Tuple[str, ...]] = {
     "S1": (
