@@ -1,0 +1,92 @@
+{
+  "meta": {
+    "source": "live"
+  },
+  "results": {
+    "articles": [
+      {
+        "domain": "businesstimes.com.sg",
+        "language": "English",
+        "seendate": "20260513T123000Z",
+        "socialimage": "https://cassette.sphdigital.com.sg/image/businesstimes/6fb42bf0b1fe2f0322473da66e435907e9591ca07c70a17cfa6c3d230949100e?\u0026f=webp",
+        "sourcecountry": "Singapore",
+        "title": "Tencent Q1 revenue miss heightens pressure for AI payoff",
+        "url": "https://www.businesstimes.com.sg/companies-markets/telcos-media-tech/tencent-q1-revenue-miss-heightens-pressure-ai-payoff",
+        "url_mobile": ""
+      },
+      {
+        "domain": "cnet.com",
+        "language": "English",
+        "seendate": "20260513T123000Z",
+        "socialimage": "https://www.cnet.com/a/img/resize/49980c1ba0a470969dc9988d9d200b3453d480d8/hub/2026/04/24/a2ce84f2-d162-4b62-8621-2b1cdeced3b5/cnet-google-io-01b.jpg?auto=webp\u0026fit=crop",
+        "sourcecountry": "Japan",
+        "title": "Can Google Wow Us at I / O 2026 ? Here What It Has to Get Right",
+        "url": "https://www.cnet.com/tech/services-and-software/can-google-wow-us-at-io-2026-heres-what-it-has-to-get-right/",
+        "url_mobile": ""
+      },
+      {
+        "domain": "itbusinessnet.com",
+        "language": "English",
+        "seendate": "20260513T120000Z",
+        "socialimage": "",
+        "sourcecountry": "United States",
+        "title": "Narrathèque Launches a Multiplatform AI Chatbot That Turns Website Content into a Personalized AI Agent Available 24 / 7 in Under Five Minutes – IT Business Net",
+        "url": "https://itbusinessnet.com/2026/05/narratheque-launches-a-multiplatform-ai-chatbot-that-turns-website-content-into-a-personalized-ai-agent-available-24-7-in-under-five-minutes/",
+        "url_mobile": "https://itbusinessnet.com/2026/05/narratheque-launches-a-multiplatform-ai-chatbot-that-turns-website-content-into-a-personalized-ai-agent-available-24-7-in-under-five-minutes/amp/"
+      },
+      {
+        "domain": "bctv.org",
+        "language": "English",
+        "seendate": "20260513T113000Z",
+        "socialimage": "https://www.bctv.org/wp-content/uploads/2026/05/01jk-592m-mkg4-rbky.jpeg",
+        "sourcecountry": "United States",
+        "title": "A State Task Force is Hunting for Misleading AI Chatbots as the Shapiro Admin Vows Legal Crackdown",
+        "url": "https://www.bctv.org/2026/05/13/a-state-task-force-is-hunting-for-misleading-ai-chatbots-as-the-shapiro-admin-vows-legal-crackdown/",
+        "url_mobile": ""
+      },
+      {
+        "domain": "surinenglish.com",
+        "language": "English",
+        "seendate": "20260513T104500Z",
+        "socialimage": "https://s1.ppllstatics.com/surinenglish/www/multimedia/2026/05/13/vonderleyen-afp-kICF-U202231814683HwG-1200x840@RC-klFD-U101072592324x1-1200x840@Diario%20Sur.jpg",
+        "sourcecountry": "Spain",
+        "title": "EU targets social media age limits to protect children from addictive designs",
+        "url": "https://www.surinenglish.com/spain/leyen-says-discussion-20260513111153-nt.html",
+        "url_mobile": ""
+      },
+      {
+        "domain": "fortune.com",
+        "language": "English",
+        "seendate": "20260513T101500Z",
+        "socialimage": "https://fortune.com/img-assets/wp-content/uploads/2026/05/google-googlebook-preview-hero-2026.jpeg",
+        "sourcecountry": "United States",
+        "title": "Fortune Tech : The Googlebook arrives , Musk OpenAI control , Anthropic new valuation",
+        "url": "https://fortune.com/2026/05/13/behold-the-googlebook/",
+        "url_mobile": ""
+      },
+      {
+        "domain": "nature.com",
+        "language": "English",
+        "seendate": "20260513T093000Z",
+        "socialimage": "https://media.nature.com/lw1200/magazine-assets/d41586-026-01476-x/d41586-026-01476-x_52398778.jpg",
+        "sourcecountry": "United States",
+        "title": "AI can design viruses , toxins and other bioweapons . How worried should we be ? ",
+        "url": "https://www.nature.com/articles/d41586-026-01476-x",
+        "url_mobile": ""
+      },
+      {
+        "domain": "explosion.com",
+        "language": "English",
+        "seendate": "20260513T090000Z",
+        "socialimage": "https://www.explosion.com/wp-content/uploads/2026/05/lawsuit-claims-chatgpt-gave-drug-advice-that-killed-a-teen.jpg",
+        "sourcecountry": "Japan",
+        "title": "Lawsuit Claims ChatGPT Gave Drug Advice That Killed a Teen",
+        "url": "https://www.explosion.com/185253/lawsuit-claims-chatgpt-gave-drug-advice-that-killed-a-teen/",
+        "url_mobile": ""
+      }
+    ],
+    "count": 8,
+    "pillar": "chatbot-failures",
+    "query": "(\"chatbot\" OR \"AI agent\" OR \"AI assistant\") AND (lawsuit OR scandal OR fail OR harm OR sycophancy OR hallucination OR \"customer service\")"
+  }
+}

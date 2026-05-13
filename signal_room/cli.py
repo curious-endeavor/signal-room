@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence
 
+from .fetchers.gdelt import GdeltError, fetch_gdelt
 from .fetchers.last30days import DISCOVERED_ITEMS_PATH, Last30DaysError, fetch_last30days
 from .models import FEEDBACK_ACTIONS, FeedbackEvent
 from .pipeline import FEEDBACK_PATH, RAW_PATH, SOURCE_WEIGHTS_PATH, load_enriched_items, run_pipeline
@@ -26,10 +27,13 @@ def main(argv: Sequence[str] = None) -> int:
         default=None,
         help="Optional fixture JSON path. Defaults to fixtures/sample_items.json",
     )
-    run_parser.add_argument("--fetch", choices=["last30days"], default="", help="Optional live discovery backend")
+    run_parser.add_argument("--fetch", choices=["last30days", "gdelt", "both"], default="", help="Optional live discovery backend")
     run_parser.add_argument("--fetch-mock", action="store_true", help="Run the live discovery backend in mock mode")
-    run_parser.add_argument("--fetch-query-limit", type=int, default=0, help="Limit how many discovery queries to run")
+    run_parser.add_argument("--fetch-query-limit", type=int, default=0, help="Limit how many discovery queries to run (last30days)")
     run_parser.add_argument("--fetch-lookback-days", type=int, default=0, help="Override last30days lookback window in days")
+    run_parser.add_argument("--fetch-pillars", default="all", help="GDELT pillars (CSV or 'all'). Ignored for last30days.")
+    run_parser.add_argument("--fetch-timespan", default="", help="GDELT timespan (e.g. 1d, 7d). Ignored for last30days.")
+    run_parser.add_argument("--fetch-max", type=int, default=0, help="GDELT max records per pillar. Ignored for last30days.")
     run_parser.add_argument(
         "--fixtures-only",
         action="store_true",
@@ -38,10 +42,13 @@ def main(argv: Sequence[str] = None) -> int:
     run_parser.add_argument("--emit", choices=["text", "json"], default="text")
 
     fetch_parser = subparsers.add_parser("fetch", help="Fetch discovery items from a backend")
-    fetch_parser.add_argument("--backend", choices=["last30days"], required=True)
+    fetch_parser.add_argument("--backend", choices=["last30days", "gdelt", "both"], required=True)
     fetch_parser.add_argument("--mock", action="store_true", help="Run the backend in mock mode")
-    fetch_parser.add_argument("--query-limit", type=int, default=0, help="Limit how many discovery queries to run")
+    fetch_parser.add_argument("--query-limit", type=int, default=0, help="Limit how many discovery queries to run (last30days)")
     fetch_parser.add_argument("--lookback-days", type=int, default=0, help="Override last30days lookback window in days")
+    fetch_parser.add_argument("--pillars", default="all", help="GDELT pillars (CSV or 'all'). Ignored for last30days.")
+    fetch_parser.add_argument("--timespan", default="", help="GDELT timespan (e.g. 1d, 7d). Ignored for last30days.")
+    fetch_parser.add_argument("--max", type=int, default=0, help="GDELT max records per pillar. Ignored for last30days.")
     fetch_parser.add_argument("--emit", choices=["text", "json"], default="text")
 
     feedback_parser = subparsers.add_parser("feedback", help="Record feedback for a surfaced item")
@@ -94,6 +101,9 @@ def main(argv: Sequence[str] = None) -> int:
             "fetch_mock": args.fetch_mock,
             "fetch_query_limit": args.fetch_query_limit,
             "fetch_lookback_days": args.fetch_lookback_days,
+            "fetch_pillars": _parse_pillars(args.fetch_pillars),
+            "fetch_timespan": args.fetch_timespan or None,
+            "fetch_max": args.fetch_max or None,
         }
         if args.fixture:
             run_kwargs["fixture_path"] = args.fixture
@@ -109,10 +119,26 @@ def main(argv: Sequence[str] = None) -> int:
                     query_limit=args.query_limit or None,
                     lookback_days=args.lookback_days or None,
                 )
+            elif args.backend == "gdelt":
+                summary = fetch_gdelt(
+                    pillars=_parse_pillars(args.pillars),
+                    timespan=args.timespan or None,
+                    max_records=args.max or None,
+                    mock=args.mock,
+                )
+            elif args.backend == "both":
+                summary = _fetch_both(
+                    mock=args.mock,
+                    query_limit=args.query_limit or None,
+                    lookback_days=args.lookback_days or None,
+                    pillars=_parse_pillars(args.pillars),
+                    timespan=args.timespan or None,
+                    max_records=args.max or None,
+                )
             else:
                 parser.error("Unknown fetch backend")
                 return 2
-        except Last30DaysError as exc:
+        except (Last30DaysError, GdeltError) as exc:
             if args.emit == "json":
                 print(json.dumps({"ok": False, "error": str(exc)}, indent=2, sort_keys=True))
             else:
@@ -234,6 +260,36 @@ def _load_queries() -> list:
     queries = list(payload.get("queries", []))
     queries.sort(key=lambda item: (int(item.get("priority", 999)), item.get("id", "")))
     return queries
+
+
+def _parse_pillars(raw: str):
+    """Translate CLI pillars input. 'all' or empty → None (fetch every pillar)."""
+    if not raw or raw.strip().lower() == "all":
+        return None
+    return [p.strip() for p in raw.split(",") if p.strip()]
+
+
+def _fetch_both(mock, query_limit, lookback_days, pillars, timespan, max_records):
+    """Run both backends and persist a deduped payload via discovery_store."""
+    from . import discovery_store  # local import; lands in U4
+
+    last30 = fetch_last30days(
+        mock=mock,
+        query_limit=query_limit,
+        lookback_days=lookback_days,
+        output_path=None,
+    )
+    gdelt = fetch_gdelt(
+        pillars=pillars,
+        timespan=timespan,
+        max_records=max_records,
+        mock=mock,
+        output_path=None,
+    )
+    return discovery_store.write_merged_discovered_items(
+        DISCOVERED_ITEMS_PATH,
+        [last30, gdelt],
+    )
 
 
 def _parse_sources(raw_sources: str) -> list:

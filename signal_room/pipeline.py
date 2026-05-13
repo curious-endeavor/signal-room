@@ -38,6 +38,9 @@ def run_pipeline(
     fetch_mock: bool = False,
     fetch_query_limit: int = 0,
     fetch_lookback_days: int = 0,
+    fetch_pillars=None,
+    fetch_timespan=None,
+    fetch_max=None,
 ) -> Dict[str, Any]:
     ensure_dirs()
     seed_payload = read_json(SEEDS_PATH, {"sources": []})
