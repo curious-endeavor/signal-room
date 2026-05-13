@@ -1,0 +1,51 @@
+version: 2
+project_name: gdelt-pp-cli
+changelog:
+  disable: true
+builds:
+  - id: gdelt-pp-cli
+    main: ./cmd/gdelt-pp-cli
+    binary: gdelt-pp-cli
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X gdelt-pp-cli/internal/cli.version={{ .Version }}
+    targets:
+      - darwin_amd64
+      - darwin_arm64
+      - linux_amd64
+      - linux_arm64
+      - windows_amd64
+      - windows_arm64
+  - id: gdelt-pp-mcp
+    main: ./cmd/gdelt-pp-mcp
+    binary: gdelt-pp-mcp
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w
+    targets:
+      - darwin_amd64
+      - darwin_arm64
+      - linux_amd64
+      - linux_arm64
+      - windows_amd64
+      - windows_arm64
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+checksum:
+  name_template: checksums.txt
+brews:
+  - name: gdelt-pp-cli
+    repository:
+      owner: 142
+      name: homebrew-tap
+    homepage: "https://github.com/142/gdelt-pp-cli"
+    description: "Search worldwide news on any topic, track named pillars, and see what's new since last check — backed by a local..."
+    install: |
+      bin.install "gdelt-pp-cli"
+      bin.install "gdelt-pp-mcp"

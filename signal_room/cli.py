@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence
 
+from .fetchers.gdelt import GdeltError, fetch_gdelt
 from .fetchers.last30days import DISCOVERED_ITEMS_PATH, Last30DaysError, fetch_last30days
 from .models import FEEDBACK_ACTIONS, FeedbackEvent
 from .pipeline import FEEDBACK_PATH, RAW_PATH, SOURCE_WEIGHTS_PATH, load_enriched_items, run_pipeline
@@ -26,12 +27,15 @@ def main(argv: Sequence[str] = None) -> int:
         default=None,
         help="Optional fixture JSON path. Defaults to fixtures/sample_items.json",
     )
-    run_parser.add_argument("--fetch", choices=["last30days"], default="", help="Optional live discovery backend")
+    run_parser.add_argument("--fetch", choices=["last30days", "gdelt", "both"], default="", help="Optional live discovery backend")
     run_parser.add_argument("--fetch-mock", action="store_true", help="Run the live discovery backend in mock mode")
-    run_parser.add_argument("--fetch-query-limit", type=int, default=0, help="Limit how many discovery queries to run")
+    run_parser.add_argument("--fetch-query-limit", type=int, default=0, help="Limit how many discovery queries to run (last30days)")
     run_parser.add_argument("--fetch-lookback-days", type=int, default=0, help="Override last30days lookback window in days")
-    run_parser.add_argument("--fetch-parallelism", type=int, default=4, help="How many discovery queries to fire in parallel (default 4)")
+    run_parser.add_argument("--fetch-parallelism", type=int, default=4, help="How many discovery queries to fire in parallel (default 4, last30days only)")
     run_parser.add_argument("--fetch-sources", default="", help="Comma-separated last30days search sources (default: all from config)")
+    run_parser.add_argument("--fetch-pillars", default="all", help="GDELT pillars (CSV or 'all'). Ignored for last30days.")
+    run_parser.add_argument("--fetch-timespan", default="", help="GDELT timespan (e.g. 1d, 7d). Ignored for last30days.")
+    run_parser.add_argument("--fetch-max", type=int, default=0, help="GDELT max records per pillar. Ignored for last30days.")
     run_parser.add_argument(
         "--fixtures-only",
         action="store_true",
@@ -47,10 +51,13 @@ def main(argv: Sequence[str] = None) -> int:
     run_parser.add_argument("--data-suffix", default="", help="Per-brand data subdir name (default: inferred from --brief; '' = shared data/)")
 
     fetch_parser = subparsers.add_parser("fetch", help="Fetch discovery items from a backend")
-    fetch_parser.add_argument("--backend", choices=["last30days"], required=True)
+    fetch_parser.add_argument("--backend", choices=["last30days", "gdelt", "both"], required=True)
     fetch_parser.add_argument("--mock", action="store_true", help="Run the backend in mock mode")
-    fetch_parser.add_argument("--query-limit", type=int, default=0, help="Limit how many discovery queries to run")
+    fetch_parser.add_argument("--query-limit", type=int, default=0, help="Limit how many discovery queries to run (last30days)")
     fetch_parser.add_argument("--lookback-days", type=int, default=0, help="Override last30days lookback window in days")
+    fetch_parser.add_argument("--pillars", default="all", help="GDELT pillars (CSV or 'all'). Ignored for last30days.")
+    fetch_parser.add_argument("--timespan", default="", help="GDELT timespan (e.g. 1d, 7d). Ignored for last30days.")
+    fetch_parser.add_argument("--max", type=int, default=0, help="GDELT max records per pillar. Ignored for last30days.")
     fetch_parser.add_argument("--emit", choices=["text", "json"], default="text")
 
     feedback_parser = subparsers.add_parser("feedback", help="Record feedback for a surfaced item")
@@ -93,6 +100,13 @@ def main(argv: Sequence[str] = None) -> int:
     lab_show_parser.add_argument("--top", type=int, default=3)
     lab_show_parser.add_argument("--emit", choices=["text", "json"], default="text")
 
+    plan_parser = subparsers.add_parser("plan", help="Generate Signal-Room QueryPlans for every query in a brief (skips vendor's grok planner)")
+    plan_parser.add_argument("--brief", required=True, type=Path, help="Path to brief.yaml")
+    plan_parser.add_argument("--out", type=Path, default=Path("config/plans"), help="Output dir for plan JSON files (default: config/plans/)")
+    plan_parser.add_argument("--model", default="claude-sonnet-4-6", help="Planner model")
+    plan_parser.add_argument("--only", default="", help="Comma-separated query ids to plan; empty = all")
+    plan_parser.add_argument("--emit", choices=["text", "json"], default="text")
+
     args = parser.parse_args(argv)
     if args.command == "run":
         fetch_sources_list = [s.strip() for s in args.fetch_sources.split(",") if s.strip()] or None
@@ -115,6 +129,9 @@ def main(argv: Sequence[str] = None) -> int:
             "fetch_sources": fetch_sources_list,
             "brand_config_dir": brand_config_dir,
             "data_suffix": data_suffix,
+            "fetch_pillars": _parse_pillars(args.fetch_pillars),
+            "fetch_timespan": args.fetch_timespan or None,
+            "fetch_max": args.fetch_max or None,
         }
         if args.fixture:
             run_kwargs["fixture_path"] = args.fixture
@@ -149,16 +166,16 @@ def main(argv: Sequence[str] = None) -> int:
 
     if args.command == "fetch":
         try:
-            if args.backend == "last30days":
-                summary = fetch_last30days(
-                    mock=args.mock,
-                    query_limit=args.query_limit or None,
-                    lookback_days=args.lookback_days or None,
-                )
-            else:
-                parser.error("Unknown fetch backend")
-                return 2
-        except Last30DaysError as exc:
+            summary = _dispatch_fetch(
+                backend=args.backend,
+                mock=args.mock,
+                query_limit=args.query_limit or None,
+                lookback_days=args.lookback_days or None,
+                pillars=_parse_pillars(args.pillars),
+                timespan=args.timespan or None,
+                max_records=args.max or None,
+            )
+        except (Last30DaysError, GdeltError) as exc:
             if args.emit == "json":
                 print(json.dumps({"ok": False, "error": str(exc)}, indent=2, sort_keys=True))
             else:
@@ -262,6 +279,38 @@ def main(argv: Sequence[str] = None) -> int:
                 print(f"Query lab failed: {exc}")
             return 1
 
+    if args.command == "plan":
+        import yaml
+        from .planner import plan_query
+
+        brief = yaml.safe_load(Path(args.brief).read_text(encoding="utf-8")) or {}
+        queries = (((brief.get("projection") or {}).get("signal_room") or {}).get("discovery_queries") or [])
+        only = {s.strip() for s in args.only.split(",") if s.strip()}
+        if only:
+            queries = [q for q in queries if isinstance(q, dict) and q.get("id") in only]
+        if not queries:
+            print(f"No discovery_queries found in {args.brief} (after --only filter)")
+            return 1
+        args.out.mkdir(parents=True, exist_ok=True)
+        results = []
+        for q in queries:
+            qid = q.get("id", "")
+            if not qid:
+                continue
+            try:
+                plan = plan_query(args.brief, q, model=args.model)
+                out_path = args.out / f"{qid}.json"
+                out_path.write_text(json.dumps(plan, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+                results.append({"id": qid, "topic": q.get("topic", ""), "out": str(out_path), "subqueries": len(plan.get("subqueries", [])), "ok": True})
+                print(f"  ✓ {qid}  →  {out_path}  ({len(plan.get('subqueries', []))} subqueries)")
+            except Exception as exc:
+                results.append({"id": qid, "topic": q.get("topic", ""), "ok": False, "error": str(exc)})
+                print(f"  ✗ {qid}: {exc}")
+        payload = {"plans_dir": str(args.out), "results": results, "ok": all(r["ok"] for r in results)}
+        if args.emit == "json":
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0 if payload["ok"] else 1
+
     parser.error("Unknown command")
     return 2
 
@@ -295,6 +344,46 @@ def _load_queries() -> list:
     queries = list(payload.get("queries", []))
     queries.sort(key=lambda item: (int(item.get("priority", 999)), item.get("id", "")))
     return queries
+
+
+def _parse_pillars(raw: str):
+    """Translate CLI pillars input. 'all' or empty → None (fetch every pillar)."""
+    if not raw or raw.strip().lower() == "all":
+        return None
+    return [p.strip() for p in raw.split(",") if p.strip()]
+
+
+def _dispatch_fetch(backend, mock, query_limit, lookback_days, pillars, timespan, max_records):
+    """Run one or both backends and persist a merged payload via discovery_store.
+
+    All single-backend writes go through `write_merged_discovered_items` so
+    `first_seen_at` survives re-fetches and `meta.source` stays consistent.
+    """
+    from . import discovery_store
+
+    payloads = []
+    if backend in {"last30days", "both"}:
+        payloads.append(fetch_last30days(
+            mock=mock,
+            query_limit=query_limit,
+            lookback_days=lookback_days,
+            output_path=None,
+            parallelism=4,
+        ))
+    if backend in {"gdelt", "both"}:
+        payloads.append(fetch_gdelt(
+            pillars=pillars,
+            timespan=timespan,
+            max_records=max_records,
+            mock=mock,
+            output_path=None,
+        ))
+    if not payloads:
+        raise ValueError(f"Unknown fetch backend: {backend}")
+    return discovery_store.write_merged_discovered_items(
+        DISCOVERED_ITEMS_PATH,
+        payloads,
+    )
 
 
 def _parse_sources(raw_sources: str) -> list:

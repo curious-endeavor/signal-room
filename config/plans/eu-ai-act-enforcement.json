@@ -1,0 +1,65 @@
+{
+  "intent": "breaking_news",
+  "freshness_mode": "strict_recent",
+  "cluster_mode": "none",
+  "raw_topic": "EU AI Act enforcement 2026 deployer general purpose AI compliance fine",
+  "subqueries": [
+    {
+      "label": "eu-ai-act-enforcement-news",
+      "search_query": "EU AI Act enforcement 2026 fine penalty deployer compliance deadline",
+      "ranking_query": "What are the latest news stories about EU AI Act enforcement actions, fines, or compliance deadlines in 2026 affecting deployers of general purpose AI systems?",
+      "sources": [
+        "grounding",
+        "x",
+        "reddit"
+      ],
+      "weight": 0.35
+    },
+    {
+      "label": "gpai-deployer-obligations",
+      "search_query": "EU AI Act general purpose AI GPAI deployer obligations article 50 disclosure 2026",
+      "ranking_query": "What specific compliance obligations does the EU AI Act impose on deployers of general purpose AI models in 2026, including Article 50 transparency and disclosure requirements?",
+      "sources": [
+        "grounding",
+        "reddit",
+        "hackernews"
+      ],
+      "weight": 0.25
+    },
+    {
+      "label": "enterprise-ai-compliance-response",
+      "search_query": "enterprise AI compliance EU AI Act CISO risk management ISO 42001 NIST AI RMF 2026",
+      "ranking_query": "How are enterprise security leaders and CISOs responding to EU AI Act compliance requirements in 2026, including adoption of ISO 42001 and NIST AI RMF frameworks?",
+      "sources": [
+        "grounding",
+        "x",
+        "reddit"
+      ],
+      "weight": 0.25
+    },
+    {
+      "label": "ai-act-regulatory-discourse",
+      "search_query": "EU AI Act enforcement national authority action 2026 AI liability regulation",
+      "ranking_query": "What is the community and expert discourse around EU AI Act national enforcement authority actions, regulatory investigations, and AI liability developments in 2026?",
+      "sources": [
+        "x",
+        "hackernews",
+        "reddit"
+      ],
+      "weight": 0.15
+    }
+  ],
+  "source_weights": {
+    "grounding": 0.38,
+    "x": 0.25,
+    "reddit": 0.18,
+    "hackernews": 0.12,
+    "youtube": 0.04,
+    "instagram": 0.02,
+    "github": 0.01
+  },
+  "notes": [
+    "Decomposed into four angles — live enforcement news, specific GPAI/deployer obligations (Article 50), enterprise CISO compliance response, and regulatory discourse — because Alice's buyer urgency comes from all four: news pegs, legal specifics, enterprise buyer language, and community sentiment shaping the CISO conversation.",
+    "planner=signal-room (claude-sonnet-4-6)"
+  ]
+}

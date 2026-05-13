@@ -220,12 +220,26 @@ def fetch_last30days(
     return summary
 
 
+PLANS_DIR = CONFIG_DIR / "plans"
+
+
 def _load_queries() -> List[Dict[str, Any]]:
     if not DISCOVERY_QUERIES_PATH.exists():
         raise Last30DaysError(f"Missing discovery query config: {DISCOVERY_QUERIES_PATH}")
     payload = json.loads(DISCOVERY_QUERIES_PATH.read_text(encoding="utf-8"))
     queries = list(payload.get("queries", []))
     queries.sort(key=lambda item: (int(item.get("priority", 999)), item.get("id", "")))
+    # Attach Signal-Room-generated plan paths when available. The fetcher passes
+    # the file as `--plan <path>` to /last30days, which skips its (frequently
+    # broken) internal grok planner. See signal_room/planner.py.
+    if PLANS_DIR.exists():
+        for q in queries:
+            qid = str(q.get("id", ""))
+            if not qid:
+                continue
+            candidate = PLANS_DIR / f"{qid}.json"
+            if candidate.exists():
+                q["plan_path"] = str(candidate)
     return queries
 
 
@@ -247,6 +261,7 @@ def _run_query(
         mock=mock,
         search_sources=selected_sources,
         lookback_days=_query_lookback_days(query),
+        plan_path=query.get("plan_path"),
     )
     env = _subprocess_env()
     timeout_seconds = _timeout_seconds()
@@ -336,6 +351,7 @@ def _build_command(
     mock: bool,
     search_sources: Optional[List[str]],
     lookback_days: Optional[int],
+    plan_path: Optional[str] = None,
 ) -> List[str]:
     last30days_home = _resolve_last30days_home()
     script_path = last30days_home / "scripts" / "last30days.py"
@@ -362,6 +378,8 @@ def _build_command(
         command.extend(["--search", ",".join(selected_sources)])
     if lookback_days:
         command.extend(["--lookback-days", str(lookback_days)])
+    if plan_path:
+        command.extend(["--plan", str(plan_path)])
     return command
 
 

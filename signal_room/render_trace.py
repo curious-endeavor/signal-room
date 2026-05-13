@@ -1,16 +1,14 @@
-"""Render a trace.jsonl as a visual funnel.
+"""Render a trace.jsonl as a visual funnel in the Signal Room visual idiom.
 
-Goals:
-- Show the pipeline as a top-to-bottom funnel: queries → raw items → dedup →
-  score buckets → digest.
-- Each stage is a card with a big number; nothing else by default.
-- Per-query bars are sized by item count, so dud queries are visible at a glance.
-- Score buckets are horizontal bars.
-- Items at each stage are tucked behind click-to-reveal — never default-open.
-- Per-item drill-down (the exact prompt sent and the exact response received)
-  is one more click in.
-
-The visual identity matches Signal Room (CE tokens, Typekit/Inter, red accent).
+Stages, top to bottom:
+  1. Brief loaded
+  2. Queries fired (horizontal bars sized by item count, label = actual search text)
+  3. Raw items returned (big number)
+  4. After dedup (big number, with dropped count)
+  5. LLM scoring (count + four horizontal bars per score bucket)
+  6. Digest (final top N)
+Click any bar → jumps to the drill-down section.
+Click any item → expands to show the exact Claude prompt + parsed response.
 """
 from __future__ import annotations
 
@@ -21,8 +19,8 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 
-def _h(text: Any) -> str:
-    return html.escape(str(text), quote=True)
+def _h(x: Any) -> str:
+    return html.escape(str(x), quote=True)
 
 
 def _json_block(obj: Any) -> str:
@@ -35,6 +33,49 @@ def _json_block(obj: Any) -> str:
 
 def _pre(text: Any) -> str:
     return f'<pre class="code">{_h(text)}</pre>'
+
+
+def _load_vendor_report(brand: str, qid: str) -> Dict[str, Any]:
+    """Read the /last30days vendor report.json for one query if it's on disk.
+
+    Looks in two layouts (vendor writes to one or the other depending on
+    whether brand isolation is active for this run):
+      1. data/last30days/runs/<brand>/<YYYY-MM-DD>/<qid>/report.json
+      2. data/last30days/runs/<YYYY-MM-DD>/<qid>/report.json
+    Picks the report with the latest mtime so the most recent run wins
+    regardless of layout.
+    """
+    if not qid:
+        return {}
+    repo_root = Path(__file__).resolve().parents[1]
+    runs_base = repo_root / "data" / "last30days" / "runs"
+    if not runs_base.exists():
+        return {}
+
+    candidates: List[Path] = []
+    branded = runs_base / brand
+    if branded.exists():
+        for date_dir in branded.iterdir():
+            if not date_dir.is_dir():
+                continue
+            report = date_dir / qid / "report.json"
+            if report.exists():
+                candidates.append(report)
+    for date_dir in runs_base.iterdir():
+        if not date_dir.is_dir() or date_dir.name == brand:
+            continue
+        report = date_dir / qid / "report.json"
+        if report.exists():
+            candidates.append(report)
+
+    if not candidates:
+        return {}
+    # Most recent mtime wins (latest run produced this report).
+    candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    try:
+        return json.loads(candidates[0].read_text(encoding="utf-8"))
+    except Exception:
+        return {}
 
 
 def render_trace_html(jsonl_path: Path, html_path: Path, brand: str, started_at: str) -> Path:
@@ -53,22 +94,19 @@ def render_trace_html(jsonl_path: Path, html_path: Path, brand: str, started_at:
     for rec in records:
         by_stage[rec.get("stage", "?")].append(rec)
 
-    # Build state once; render funnel + drill-downs from it.
     state = _build_state(by_stage, records)
-
-    parts: List[str] = []
-    parts.append(_header_html(brand, started_at, state))
-    parts.append(_funnel_html(state))
-    parts.append(_drilldowns_html(state))
-
-    body = "\n".join(parts)
+    state["brand"] = brand
+    body = "\n".join([
+        _header_html(brand, started_at, state),
+        _funnel_html(state),
+        _drilldowns_html(state),
+    ])
     html_text = _PAGE_SHELL.format(title=f"Trace — {_h(brand)} — {_h(started_at)}", body=body, css=_CSS)
     Path(html_path).write_text(html_text, encoding="utf-8")
     return html_path
 
 
 def _build_state(by_stage, records):
-    started = (by_stage.get("pipeline_started") or [{}])[0].get("payload", {})
     brief = (by_stage.get("brief_loaded") or [{}])[0].get("payload", {})
     l30_started = (by_stage.get("last30days_started") or [{}])[0].get("payload", {})
     l30_done = (by_stage.get("last30days_complete") or [{}])[0].get("payload", {})
@@ -95,7 +133,6 @@ def _build_state(by_stage, records):
         })
     max_q = max((q["item_count"] for q in queries), default=1) or 1
 
-    # Bucket items by score band
     buckets = {"core": [], "adjacent": [], "tangential": [], "off": []}
     for p in scores:
         score = (p.get("parsed") or {}).get("score", 0) or 0
@@ -107,6 +144,8 @@ def _build_state(by_stage, records):
             buckets["tangential"].append(p)
         else:
             buckets["off"].append(p)
+    for key in buckets:
+        buckets[key].sort(key=lambda p: -(p.get("parsed", {}).get("score") or 0))
     max_b = max((len(v) for v in buckets.values()), default=1) or 1
 
     return {
@@ -148,11 +187,8 @@ def _funnel_html(state):
     max_b = state["max_b"]
     digest = state["digest"]
     total_raw = state["l30_done"].get("total_item_count") or sum(q["item_count"] for q in queries)
-
-    # Stage 1: brief — minimal pill
     brief = state["brief"]
 
-    # Stage 2: queries as bars — show the actual search text fired, not the slug ID.
     query_rows = "".join(f"""
 <a class="funnel-bar" href="#q-{_h(q['id'])}">
   <span class="fb-label" title="{_h(q['id'])}">{_h(q['topic'] or q['search_text'] or q['id'])}</span>
@@ -161,7 +197,6 @@ def _funnel_html(state):
 </a>
 """ for q in queries)
 
-    # Stage 4: score buckets
     bucket_meta = [
         ("core", "CORE", "80–100"),
         ("adjacent", "ADJACENT", "60–79"),
@@ -267,21 +302,29 @@ def _drilldowns_html(state):
 
 def _queries_drilldown(state):
     rows = []
+    brand = state.get("brand", "")
     for q in state["queries"]:
         samples_html = "".join(
             f"<li>{_h(s.get('title',''))} <span class='dim mono'>· {_h(s.get('source',''))}</span></li>"
             for s in q["samples"]
         ) or "<li class='dim'>nothing returned</li>"
+
+        # Pull the vendor processing report for this query.
+        report = _load_vendor_report(brand, q["id"])
+        processing_html = _vendor_processing_html(report) if report else ""
+
         rows.append(f"""
 <details class="drill-item" id="q-{_h(q['id'])}">
   <summary>
-    <span class="mono">{_h(q['id'])}</span>
     <span class="drill-title">{_h(q['topic'])}</span>
     <span class="score">{_h(q['item_count'])}</span>
   </summary>
   <div class="drill-body">
+    <p class="micro">id · <span class="mono">{_h(q['id'])}</span></p>
     <p class="micro">why · {_h(q['why'])}</p>
     <p class="micro mono">search · {_h(q['search_text'])}</p>
+    {processing_html}
+    <p class="micro">items returned</p>
     <ul class="bare-list">{samples_html}</ul>
   </div>
 </details>""")
@@ -290,6 +333,144 @@ def _queries_drilldown(state):
   <h2 class="drill-section">Stage 2 · Queries</h2>
   {"".join(rows)}
 </section>
+"""
+
+
+def _vendor_processing_html(report: Dict[str, Any]) -> str:
+    """Render the /last30days vendor report.json as a compact breakdown.
+
+    Shows the journey: raw query → planner's interpretation → per-provider
+    actual search → items grouped by source. Click any source to see its
+    individual items so you can spot which providers returned noise.
+    """
+    items_by_source = report.get("items_by_source") or {}
+    errors_by_source = report.get("errors_by_source") or {}
+    provider_runtime = report.get("provider_runtime") or {}
+    query_plan = report.get("query_plan") or {}
+    artifacts = report.get("artifacts") or {}
+    resolved = artifacts.get("resolved") or {}
+    range_from = report.get("range_from", "")
+    range_to = report.get("range_to", "")
+
+    raw_topic = query_plan.get("raw_topic", "")
+    intent = query_plan.get("intent", "—")
+    freshness = query_plan.get("freshness_mode", "—")
+    planner_model = provider_runtime.get("planner_model", "—")
+    plan_source = artifacts.get("plan_source", "—")
+    plan_notes = query_plan.get("notes") or []
+    used_fallback = any("fallback" in str(n).lower() for n in plan_notes)
+
+    # The transformation: raw topic → planner intent + subqueries.
+    subqueries = query_plan.get("subqueries") or []
+    subq_items_html = ""
+    if subqueries:
+        items = []
+        for s in subqueries:
+            if isinstance(s, dict):
+                rq = s.get("ranking_query") or s.get("label", "")
+                items.append(f"<li>{_h(rq)}</li>")
+            else:
+                items.append(f"<li>{_h(s)}</li>")
+        subq_items_html = "<ul class='bare-list'>" + "".join(items) + "</ul>"
+    else:
+        subq_items_html = "<p class='dim micro'>none — raw topic used as-is</p>"
+
+    # Per-provider details: artifacts + items, grouped by source.
+    def _provider_artifact_html(source: str) -> str:
+        art = artifacts.get(source)
+        if not art:
+            return ""
+        if source == "grounding" and isinstance(art, list):
+            bits = []
+            for entry in art:
+                lbl = entry.get("label", "")
+                count = entry.get("resultCount", "")
+                queries = entry.get("webSearchQueries", []) or []
+                bits.append(f"<div class='prov-art-line'><span class='mono dim'>{_h(lbl)}</span> · {_h(count)} results · queries: <span class='mono'>{_h(', '.join(queries))}</span></div>")
+            return "".join(bits)
+        return f"<div class='prov-art-line mono dim'>{_h(json.dumps(art, ensure_ascii=False)[:300])}</div>"
+
+    src_max = max((len(v) if isinstance(v, list) else int(v or 0) for v in items_by_source.values()), default=1) or 1
+    sorted_sources = sorted(items_by_source.items(), key=lambda kv: -(len(kv[1]) if isinstance(kv[1], list) else int(kv[1] or 0)))
+
+    source_blocks = []
+    for source, items in sorted_sources:
+        items_list = items if isinstance(items, list) else []
+        count = len(items_list)
+        prov_artifact_html = _provider_artifact_html(source)
+        err = errors_by_source.get(source, "")
+        if count == 0 and not err and not prov_artifact_html:
+            source_blocks.append(f"""
+<details class="src-block">
+  <summary>
+    <span class="src-label mono">{_h(source)}</span>
+    <span class="src-track"><span class="src-fill" style="width: 0%"></span></span>
+    <span class="src-count mono">0</span>
+    <span class="dim mono">no results, no errors</span>
+  </summary>
+</details>""")
+            continue
+        item_rows = "".join(
+            f"<li><a href='{_h(it.get('source_url',''))}' target='_blank' rel='noreferrer'>{_h(it.get('title',''))}</a></li>"
+            for it in items_list
+        ) or "<li class='dim'>no items returned by this source</li>"
+        source_blocks.append(f"""
+<details class="src-block">
+  <summary>
+    <span class="src-label mono">{_h(source)}</span>
+    <span class="src-track"><span class="src-fill" style="width: {100 * count / src_max:.1f}%"></span></span>
+    <span class="src-count mono">{_h(count)}</span>
+    {('<span class="src-err">err: ' + _h(err) + '</span>') if err else ''}
+  </summary>
+  <div class="src-detail">
+    {prov_artifact_html}
+    <ul class="bare-list">{item_rows}</ul>
+  </div>
+</details>""")
+
+    # Resolved entities (what the planner pulled out of the topic).
+    resolved_summary = []
+    for k, v in (resolved or {}).items():
+        if not v:
+            continue
+        if isinstance(v, list):
+            if len(v) == 0:
+                continue
+            resolved_summary.append(f"<span><b>{_h(k)}</b> {_h(', '.join(map(str, v)))}</span>")
+        else:
+            resolved_summary.append(f"<span><b>{_h(k)}</b> {_h(v)}</span>")
+    resolved_html = ""
+    if resolved_summary:
+        resolved_html = "<p class='micro'>resolved entities (planner extraction)</p><div class='vendor-meta'>" + "".join(resolved_summary) + "</div>"
+
+    notes_html = ""
+    if plan_notes:
+        notes_html = "<p class='micro'>planner notes</p><ul class='bare-list'>" + "".join(f"<li class='mono dim'>{_h(n)}</li>" for n in plan_notes) + "</ul>"
+
+    return f"""
+<p class="micro">how /last30days processed this</p>
+<div class="vendor-block">
+  <div class="vendor-meta">
+    <span><b>intent</b> {_h(intent)}</span>
+    <span><b>freshness</b> {_h(freshness)}</span>
+    <span><b>range</b> {_h(range_from)} → {_h(range_to)}</span>
+    <span><b>planner</b> {_h(planner_model)} <span class="dim">({_h(plan_source)})</span></span>
+    {'<span class="vendor-fallback">⚠ planner fell back</span>' if used_fallback else ''}
+  </div>
+
+  <p class="micro">raw topic we sent</p>
+  <div class="vendor-quote mono">{_h(raw_topic)}</div>
+
+  <p class="micro">subqueries the planner actually ran</p>
+  {subq_items_html}
+
+  {resolved_html}
+
+  <p class="micro">per-source breakdown (click to see items)</p>
+  <div class="src-bars">{"".join(source_blocks)}</div>
+
+  {notes_html}
+</div>
 """
 
 
@@ -363,7 +544,7 @@ def _score_item_row(p):
 def _digest_drilldown(state):
     digest = state["digest"]
     rows = "".join(
-        f"""<div class="digest-row" id="digest">
+        f"""<div class="digest-row">
   <span class="digest-rank mono">#{i+1}</span>
   <div class="digest-body">
     <div class="drill-title">{_h(s.get('title',''))}</div>
@@ -383,181 +564,41 @@ def _digest_drilldown(state):
 
 _CSS = """
 @import url("https://staging.curiousendeavor.com/canon/system/tokens.css");
-
 * { box-sizing: border-box; }
-html {
-  color: var(--ce-ink);
-  background: var(--ce-bg);
-  font-family: var(--sans);
-  font-size: var(--t-body);
-  line-height: var(--lh-body);
-  -webkit-font-smoothing: antialiased;
-}
+html { color: var(--ce-ink); background: var(--ce-bg); font-family: var(--sans); font-size: var(--t-body); line-height: var(--lh-body); -webkit-font-smoothing: antialiased; }
 body { margin: 0; min-width: 320px; background: var(--ce-bg); }
 ::selection { color: #fff; background: var(--ce-red); }
 a { color: inherit; text-decoration: none; }
 a:hover { color: var(--ce-red); }
 
-.site-header {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s-4);
-  width: min(var(--container), calc(100vw - (var(--gutter) * 2)));
-  margin: 0 auto;
-  padding: 14px 0;
-  border-bottom: var(--hair);
-  background: rgba(255, 255, 255, 0.94);
-  backdrop-filter: blur(20px) saturate(160%);
-}
-.brand {
-  color: var(--ce-black);
-  font-family: var(--serif);
-  font-size: 18px;
-  font-weight: 400;
-  letter-spacing: -0.01em;
-}
+.site-header { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between; gap: var(--s-4); width: min(960px, calc(100vw - 48px)); margin: 0 auto; padding: 14px 0; border-bottom: var(--hair); background: rgba(255,255,255,0.94); backdrop-filter: blur(20px) saturate(160%); }
+.brand { color: var(--ce-black); font-family: var(--serif); font-size: 18px; font-weight: 400; letter-spacing: -0.01em; }
 .brand::after { content: "."; color: var(--ce-red); }
-.header-meta {
-  display: flex;
-  align-items: center;
-  gap: var(--s-3);
-  color: var(--ce-grey);
-  font-family: var(--mono);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-}
+.header-meta { display: flex; align-items: center; gap: var(--s-3); color: var(--ce-grey); font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; }
 .brand-tag { color: var(--ce-red); font-weight: 500; }
 
-/* === FUNNEL === */
-.funnel {
-  width: min(820px, calc(100vw - (var(--gutter) * 2)));
-  margin: var(--s-6) auto var(--s-5);
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0;
-}
-.stage-card {
-  display: grid;
-  grid-template-columns: 48px 1fr;
-  gap: var(--s-3);
-  align-items: start;
-  padding: var(--s-4) var(--s-5);
-  border: 1px solid var(--ce-border);
-  border-radius: var(--r-3);
-  background: #fff;
-}
+.funnel { width: min(960px, calc(100vw - 48px)); margin: var(--s-6) auto var(--s-5); display: flex; flex-direction: column; gap: 0; }
+.stage-card { display: grid; grid-template-columns: 48px 1fr; gap: var(--s-3); align-items: start; padding: var(--s-4) var(--s-5); border: 1px solid var(--ce-border); border-radius: var(--r-3); background: #fff; }
 .stage-card.stage-tight { padding: var(--s-3) var(--s-5); }
-.stage-card.stage-narrow {
-  background: var(--ce-bg);
-  border-style: dashed;
-}
-.stage-num {
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: var(--ce-red);
-  color: #fff;
-  font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 500;
-}
+.stage-card.stage-narrow { background: var(--ce-bg); border-style: dashed; }
+.stage-num { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--ce-red); color: #fff; font-family: var(--mono); font-size: 12px; font-weight: 500; }
 .stage-body { min-width: 0; }
-.stage-title-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--s-3);
-}
-.stage-title {
-  color: var(--ce-black);
-  font-family: var(--serif);
-  font-size: 20px;
-  font-weight: 400;
-  letter-spacing: -0.015em;
-}
-.stage-sub {
-  margin-top: 4px;
-  color: var(--ce-grey);
-  font-size: 13px;
-}
+.stage-title-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-3); }
+.stage-title { color: var(--ce-black); font-family: var(--serif); font-size: 20px; font-weight: 400; letter-spacing: -0.015em; }
+.stage-sub { margin-top: 4px; color: var(--ce-grey); font-size: 13px; }
 .stage-sub a { color: var(--ce-red); }
 .stage-sub a:hover { text-decoration: underline; }
-.big-number {
-  color: var(--ce-red);
-  font-family: var(--mono);
-  font-size: 28px;
-  font-weight: 500;
-  line-height: 1;
-}
-.arrow {
-  align-self: center;
-  color: var(--ce-light);
-  font-size: 18px;
-  line-height: 1;
-  padding: 6px 0;
-}
+.big-number { color: var(--ce-red); font-family: var(--mono); font-size: 28px; font-weight: 500; line-height: 1; }
+.arrow { align-self: center; color: var(--ce-light); font-size: 18px; line-height: 1; padding: 6px 0; }
 
-/* === BARS === */
-.bars {
-  margin-top: var(--s-3);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.funnel-bar {
-  display: grid;
-  grid-template-columns: minmax(140px, 1fr) minmax(120px, 3fr) auto;
-  gap: var(--s-3);
-  align-items: center;
-  padding: 4px 0;
-  cursor: pointer;
-}
+.bars { margin-top: var(--s-3); display: flex; flex-direction: column; gap: 8px; }
+.funnel-bar { display: grid; grid-template-columns: minmax(0, 3fr) minmax(80px, 1fr) auto; gap: var(--s-3); align-items: center; padding: 6px 0; cursor: pointer; }
 .funnel-bar:hover { color: var(--ce-red); }
-.fb-label {
-  color: var(--ce-ink);
-  font-family: var(--sans);
-  font-size: 13px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.bars-scores .fb-label {
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.fb-track {
-  display: block;
-  height: 8px;
-  background: var(--ce-bg);
-  border: 1px solid var(--ce-border);
-  border-radius: var(--r-pill);
-  overflow: hidden;
-}
-.fb-fill {
-  display: block;
-  height: 100%;
-  background: var(--ce-red);
-  border-radius: var(--r-pill);
-}
-.fb-count {
-  color: var(--ce-red);
-  font-family: var(--mono);
-  font-size: 13px;
-  font-weight: 500;
-  text-align: right;
-  min-width: 32px;
-}
+.fb-label { color: var(--ce-ink); font-family: var(--sans); font-size: 14px; line-height: 1.4; padding-right: 8px; }
+.bars-scores .fb-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+.fb-track { display: block; height: 8px; background: var(--ce-bg); border: 1px solid var(--ce-border); border-radius: var(--r-pill); overflow: hidden; }
+.fb-fill { display: block; height: 100%; background: var(--ce-red); border-radius: var(--r-pill); }
+.fb-count { color: var(--ce-red); font-family: var(--mono); font-size: 13px; font-weight: 500; text-align: right; min-width: 32px; }
 .fb-fill-core { background: var(--ce-red); }
 .fb-fill-adjacent { background: var(--ce-grey); }
 .fb-fill-tangential { background: var(--ce-light); }
@@ -566,150 +607,64 @@ a:hover { color: var(--ce-red); }
 .bucket-adjacent .fb-count { color: var(--ce-grey); }
 .bucket-tangential .fb-count, .bucket-off .fb-count { color: var(--ce-light); }
 
-/* === DRILLDOWNS === */
-.drilldown {
-  width: min(var(--container), calc(100vw - (var(--gutter) * 2)));
-  margin: var(--s-6) auto var(--s-5);
-}
-.drill-section {
-  margin: var(--s-5) 0 var(--s-3);
-  color: var(--ce-red);
-  font-family: var(--mono);
-  font-size: var(--t-label);
-  font-weight: 500;
-  letter-spacing: var(--ls-label);
-  text-transform: uppercase;
-}
-.drill-section.bucket-core { color: var(--ce-red); }
+.drilldown { width: min(var(--container), calc(100vw - 48px)); margin: var(--s-6) auto var(--s-5); }
+.drill-section { margin: var(--s-5) 0 var(--s-3); color: var(--ce-red); font-family: var(--mono); font-size: var(--t-label); font-weight: 500; letter-spacing: var(--ls-label); text-transform: uppercase; }
 .drill-section.bucket-adjacent { color: var(--ce-grey); }
 .drill-section.bucket-tangential, .drill-section.bucket-off { color: var(--ce-light); }
-
-.drill-item {
-  padding: var(--s-3) 0;
-  border-bottom: var(--hair);
-}
-.drill-item > summary {
-  cursor: pointer;
-  list-style: none;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
-  gap: var(--s-3);
-  align-items: baseline;
-}
+.drill-item { padding: var(--s-3) 0; border-bottom: var(--hair); }
+.drill-item > summary { cursor: pointer; list-style: none; display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: var(--s-3); align-items: baseline; }
 .drill-item > summary::-webkit-details-marker { display: none; }
-.drill-item > summary::before {
-  content: "▸";
-  display: inline-block;
-  color: var(--ce-light);
-  font-size: 10px;
-  width: 10px;
-  transition: transform 0.15s;
-}
+.drill-item > summary::before { content: "▸"; display: inline-block; color: var(--ce-light); font-size: 10px; width: 10px; transition: transform 0.15s; }
 .drill-item[open] > summary::before { transform: rotate(90deg); }
-.drill-title {
-  color: var(--ce-black);
-  font-family: var(--serif);
-  font-size: 16px;
-  letter-spacing: -0.01em;
-  line-height: 1.25;
-  min-width: 0;
-}
-.row-meta {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: var(--s-2);
-  align-items: center;
-  font-size: 12px;
-}
-.score {
-  color: var(--ce-red);
-  font-family: var(--mono);
-  font-size: 13px;
-  font-weight: 500;
-  min-width: 36px;
-  text-align: right;
-}
-
-.pill {
-  border: 1px solid var(--ce-border);
-  border-radius: var(--r-pill);
-  padding: 1px 7px;
-  color: var(--ce-grey);
-  background: var(--ce-bg);
-  font-family: var(--mono);
-  font-size: 9.5px;
-  letter-spacing: 0.10em;
-  text-transform: uppercase;
-}
+.drill-title { color: var(--ce-black); font-family: var(--serif); font-size: 16px; letter-spacing: -0.01em; line-height: 1.25; min-width: 0; }
+.row-meta { display: inline-flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; font-size: 12px; }
+.score { color: var(--ce-red); font-family: var(--mono); font-size: 13px; font-weight: 500; min-width: 36px; text-align: right; }
+.pill { border: 1px solid var(--ce-border); border-radius: var(--r-pill); padding: 1px 7px; color: var(--ce-grey); background: var(--ce-bg); font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.10em; text-transform: uppercase; }
 .pill-pillar { color: var(--ce-red); }
 .pill-fit-core { border-color: var(--ce-red); color: var(--ce-red); background: var(--ce-red-soft); }
 .pill-fit-adjacent { color: var(--ce-grey); }
 .pill-fit-tangential, .pill-fit-off-territory { color: var(--ce-light); }
-
-.drill-body {
-  margin-top: var(--s-3);
-  padding-top: var(--s-3);
-  padding-left: 20px;
-  border-top: 1px dashed var(--ce-border);
-}
-.drill-body.two-col {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--s-5);
-}
-@media (max-width: 880px) {
-  .drill-body.two-col { grid-template-columns: 1fr; }
-}
-.micro {
-  margin: var(--s-3) 0 var(--s-2);
-  color: var(--ce-light);
-  font-family: var(--mono);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.10em;
-  text-transform: uppercase;
-}
+.drill-body { margin-top: var(--s-3); padding-top: var(--s-3); padding-left: 20px; border-top: 1px dashed var(--ce-border); }
+.drill-body.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-5); }
+@media (max-width: 880px) { .drill-body.two-col { grid-template-columns: 1fr; } }
+.micro { margin: var(--s-3) 0 var(--s-2); color: var(--ce-light); font-family: var(--mono); font-size: 10px; font-weight: 500; letter-spacing: 0.10em; text-transform: uppercase; }
 .micro a { color: var(--ce-red); }
 .dim { color: var(--ce-light); }
 .mono { font-family: var(--mono); font-size: 12px; }
 .bare-list { list-style: none; padding: 0; margin: 4px 0 0; }
-.bare-list li {
-  padding: 4px 0;
-  color: var(--ce-ink);
-  font-size: 13px;
-  line-height: 1.5;
-  border-bottom: 1px dotted var(--ce-border);
-}
+.bare-list li { padding: 4px 0; color: var(--ce-ink); font-size: 13px; line-height: 1.5; border-bottom: 1px dotted var(--ce-border); }
 .bare-list li:last-child { border-bottom: none; }
-.code {
-  margin: 4px 0;
-  padding: var(--s-3);
-  border: 1px solid var(--ce-border);
-  border-radius: var(--r-2);
-  background: var(--ce-bg);
-  color: var(--ce-ink);
-  font-family: var(--mono);
-  font-size: 11.5px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-word;
-  overflow-x: auto;
-  max-height: 280px;
-  overflow-y: auto;
-}
-
-/* Digest rows */
-.digest-row {
-  display: grid;
-  grid-template-columns: 36px 1fr auto;
-  gap: var(--s-3);
-  align-items: center;
-  padding: var(--s-3) 0;
-  border-bottom: var(--hair);
-}
+.code { margin: 4px 0; padding: var(--s-3); border: 1px solid var(--ce-border); border-radius: var(--r-2); background: var(--ce-bg); color: var(--ce-ink); font-family: var(--mono); font-size: 11.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; overflow-x: auto; max-height: 280px; overflow-y: auto; }
+.digest-row { display: grid; grid-template-columns: 36px 1fr auto; gap: var(--s-3); align-items: center; padding: var(--s-3) 0; border-bottom: var(--hair); }
 .digest-rank { color: var(--ce-light); font-size: 12px; }
 .digest-body { min-width: 0; }
 .bucket-block { margin-top: var(--s-4); }
+
+.vendor-block { margin: var(--s-2) 0 var(--s-3); padding: var(--s-3); border: 1px solid var(--ce-border); border-radius: var(--r-2); background: var(--ce-bg); }
+.vendor-meta { display: flex; flex-wrap: wrap; gap: var(--s-3); margin-bottom: var(--s-2); color: var(--ce-grey); font-family: var(--mono); font-size: 11px; }
+.vendor-meta b { color: var(--ce-light); font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; margin-right: 4px; }
+.vendor-fallback { color: var(--ce-red); font-weight: 500; }
+.src-bars { display: flex; flex-direction: column; gap: 4px; margin: 4px 0; }
+.src-bar { display: grid; grid-template-columns: 110px minmax(80px, 1fr) auto auto; gap: var(--s-2); align-items: center; }
+.src-label { color: var(--ce-ink); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
+.src-track { display: block; height: 6px; background: #fff; border: 1px solid var(--ce-border); border-radius: var(--r-pill); overflow: hidden; }
+.src-fill { display: block; height: 100%; background: var(--ce-red); }
+.src-count { color: var(--ce-red); font-size: 12px; min-width: 28px; text-align: right; }
+.src-err { color: var(--ce-red); font-size: 10px; font-family: var(--mono); }
+
+.vendor-quote { padding: 8px 12px; margin: 4px 0; background: #fff; border-left: 3px solid var(--ce-red); font-size: 13px; color: var(--ce-ink); }
+
+.src-block { padding: 4px 0; border-bottom: 1px dotted var(--ce-border); }
+.src-block:last-child { border-bottom: none; }
+.src-block > summary { cursor: pointer; list-style: none; display: grid; grid-template-columns: 110px minmax(80px, 1fr) auto auto; gap: var(--s-2); align-items: center; padding: 4px 0; }
+.src-block > summary::-webkit-details-marker { display: none; }
+.src-block > summary::before { content: "▸"; display: inline-block; color: var(--ce-light); font-size: 9px; width: 8px; margin-right: 2px; transition: transform 0.15s; }
+.src-block[open] > summary::before { transform: rotate(90deg); }
+.src-detail { padding: 6px 0 8px 18px; }
+.src-detail .bare-list li a { color: var(--ce-ink); }
+.src-detail .bare-list li a:hover { color: var(--ce-red); text-decoration: underline; }
+.prov-art-line { margin: 4px 0; font-size: 12px; color: var(--ce-grey); }
+.prov-art-line .mono { font-size: 11px; }
 """
 
 _PAGE_SHELL = """<!DOCTYPE html>
