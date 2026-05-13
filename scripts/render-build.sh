@@ -14,16 +14,25 @@ python -c 'from pathlib import Path; p=Path("vendor/last30days-skill/scripts/lib
 
 python -m pip install .
 
-# Build the vendored GDELT CLI when a Go toolchain is available. Render's
-# default Python runtime does not include Go; if/when that becomes the
-# bottleneck, either:
-#   - switch render.yaml to a build image that includes Go ≥ 1.26.3, or
-#   - flip this project to shipping prebuilt binaries (vendor option a).
-# Until then, this block is a no-op on production builds and the gdelt
-# fetcher will surface a clear "no binary" error at runtime if invoked.
+# Install Go if missing so we can build the vendored gdelt-pp-cli.
+# Render's default Python runtime doesn't include Go; we drop a private
+# Go install into /tmp and add it to PATH for this build only. The
+# resulting binary ships in bin/gdelt-pp-cli (no toolchain needed at runtime).
+if ! command -v go >/dev/null 2>&1; then
+  GO_VERSION="${GO_VERSION:-1.26.3}"
+  GO_ARCH="linux-amd64"
+  GO_TARBALL="go${GO_VERSION}.${GO_ARCH}.tar.gz"
+  echo "installing Go ${GO_VERSION} into /tmp/go (for gdelt-pp-cli build)"
+  curl -sSL "https://go.dev/dl/${GO_TARBALL}" -o "/tmp/${GO_TARBALL}"
+  tar -C /tmp -xzf "/tmp/${GO_TARBALL}"
+  export PATH="/tmp/go/bin:${PATH}"
+  go version
+fi
+
 if command -v go >/dev/null 2>&1; then
-  echo "go toolchain detected; building bin/gdelt-pp-cli"
+  echo "go toolchain ready; building bin/gdelt-pp-cli"
   make build-gdelt
+  ls -la bin/gdelt-pp-cli 2>&1 | head -1
 else
-  echo "no go toolchain — skipping bin/gdelt-pp-cli build (gdelt fetcher will be inactive)"
+  echo "no go toolchain — skipping bin/gdelt-pp-cli build (gdelt fetcher will gracefully skip at runtime)"
 fi
