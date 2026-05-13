@@ -39,8 +39,13 @@ def healthz() -> dict[str, bool]:
     return {"ok": True}
 
 
-@app.get("/")
-def index(request: Request, q: str = "", lookback_days: int = 30) -> Any:
+@app.get("/search-classic")
+def index_classic(request: Request, q: str = "", lookback_days: int = 30) -> Any:
+    """Legacy single-query search home, preserved for backwards-compat.
+
+    New canonical home (`/`) is the brand-list page; brand-scoped search
+    lives at `/{brand}?mode=search`.
+    """
     return templates.TemplateResponse(
         request,
         "index.html",
@@ -179,9 +184,23 @@ def api_create_content(run_id: str = Form(...), item_id: str = Form(...)) -> JSO
 # Brand-routed surfaces (Alice + CE), each with a latest-run page and refetch.
 # ============================================================================
 
+_BRAND_SLUG_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$")
+
+
 def _allowed_brand(brand: str) -> Path:
-    """Validate brand is configured. Returns the brand's config dir."""
+    """Validate brand exists (DB or filesystem). Returns the brand's config dir.
+
+    A brand is valid when EITHER a DB row exists for it OR a brief.yaml file
+    sits at config/brands/<slug>/brief.yaml. DB is the new source of truth;
+    filesystem is the legacy/local-dev fallback.
+    """
+    if not _BRAND_SLUG_RE.match(brand):
+        raise HTTPException(status_code=404, detail=f"Unknown brand: {brand}")
+    db_row = store.get_brand(brand)
     brand_dir = ROOT / "config" / "brands" / brand
+    if db_row:
+        brand_dir.mkdir(parents=True, exist_ok=True)
+        return brand_dir
     brief = brand_dir / "brief.yaml"
     if not brief.exists():
         raise HTTPException(status_code=404, detail=f"Unknown brand: {brand}")
@@ -269,6 +288,386 @@ def api_brand_latest(brand: str) -> JSONResponse:
         return JSONResponse({"ok": True, "run": None})
     slim = {k: v for k, v in run.items() if k not in {"trace_jsonl", "trace_html", "digest_html"}}
     return JSONResponse({"ok": True, "run": slim})
+
+
+# ============================================================================
+# U7-U8 — Home page, onboarding entry, chat, brief finalization, editor.
+# ============================================================================
+
+def _slug_from_url(url: str) -> str:
+    """Derive a kebab-case brand slug from a URL. Falls back to a generic name."""
+    from urllib.parse import urlparse as _urlparse
+    parsed = _urlparse(url)
+    host = (parsed.netloc or "").lower().replace("www.", "")
+    base = host.split(".")[0] if host else "brand"
+    # Keep only a-z 0-9 hyphens.
+    slug = re.sub(r"[^a-z0-9-]+", "-", base).strip("-")
+    return slug or "brand"
+
+
+def _next_available_slug(base: str) -> str:
+    """If base is taken, suffix -2, -3, ..."""
+    if not store.get_brand(base) and not (ROOT / "config" / "brands" / base / "brief.yaml").exists():
+        return base
+    for n in range(2, 100):
+        cand = f"{base}-{n}"
+        if not store.get_brand(cand) and not (ROOT / "config" / "brands" / cand / "brief.yaml").exists():
+            return cand
+    # Last resort.
+    import uuid as _uuid
+    return f"{base}-{_uuid.uuid4().hex[:6]}"
+
+
+@app.get("/")
+def home(request: Request) -> Any:
+    """Brand list home page with 'Create new brand' CTA."""
+    brands = store.list_brands()
+    # Also surface filesystem-only brands (legacy) so we don't lose them.
+    fs_only: list[dict[str, Any]] = []
+    for d in (ROOT / "config" / "brands").iterdir() if (ROOT / "config" / "brands").exists() else []:
+        if not d.is_dir():
+            continue
+        if any(b["slug"] == d.name for b in brands):
+            continue
+        if (d / "brief.yaml").exists():
+            fs_only.append({"slug": d.name, "name": d.name.replace("-", " ").title(), "url": "", "created_at": "", "last_refetched_at": "", "legacy": True})
+    return templates.TemplateResponse(
+        request,
+        "home.html",
+        {"brands": brands + fs_only, "has_brands": bool(brands or fs_only)},
+    )
+
+
+@app.get("/onboarding/start")
+def onboarding_start_get(request: Request) -> Any:
+    return templates.TemplateResponse(request, "onboarding_start.html", {"error": "", "url": ""})
+
+
+@app.post("/onboarding/start")
+def onboarding_start_post(request: Request, background_tasks: BackgroundTasks,
+                          url: str = Form(...), name: str = Form("")) -> Any:
+    from urllib.parse import urlparse as _urlparse
+    parsed = _urlparse(url.strip())
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return templates.TemplateResponse(
+            request, "onboarding_start.html",
+            {"error": "Please enter a full URL starting with http:// or https://", "url": url},
+        )
+    slug = _next_available_slug(_slug_from_url(url))
+    brand_name = (name.strip() or parsed.netloc.replace("www.", "").split(".")[0].title())
+
+    # Generate passcode + hash + session token.
+    from . import auth as _auth
+    passcode = _auth.generate_passcode()
+    passcode_hash = _auth.hash_passcode(passcode)
+    session_token = _auth.generate_session_token()
+
+    # Create brand row with placeholder brief.
+    store.create_brand(
+        slug=slug,
+        name=brand_name,
+        url=url.strip(),
+        brief_json={"name": brand_name, "url": url.strip()},
+        passcode_hash=passcode_hash,
+        passcode_session_token=session_token,
+    )
+    # Kick off crawl in background; create the chat session so /onboarding can show messages immediately.
+    chat_session_id = store.create_chat_session(slug, purpose="onboarding")
+
+    # Fire crawl + first assistant turn as a background task so the user
+    # sees the passcode-reveal page immediately.
+    background_tasks.add_task(_onboarding_kickoff, slug, brand_name, url.strip(), chat_session_id)
+
+    # Set the passcode cookie automatically so the user doesn't need to enter
+    # it right away on the next page.
+    response = RedirectResponse(url=f"/{slug}/passcode-reveal?passcode={passcode}", status_code=303)
+    _auth.set_passcode_cookie(response, slug, session_token)
+    return response
+
+
+def _onboarding_kickoff(slug: str, brand_name: str, brand_url: str, chat_session_id: str) -> None:
+    """Crawl the brand site + ask Claude for the first interview turn.
+
+    Runs as a BackgroundTask so the user lands on the passcode-reveal page
+    immediately while crawl+kickoff happen behind the scenes (~30-45s).
+    """
+    from . import onboarding as _onb
+    try:
+        crawl = _onb.crawl_brand(brand_url)
+    except Exception as exc:
+        crawl = {"context": f"[crawl failed: {exc}]", "pages": [], "errors": [str(exc)]}
+    # Persist crawl context onto the session for use during chat + finalize.
+    store.execute(
+        "update chat_sessions set brand_context = ? where id = ?",
+        (crawl.get("context", "")[:30000], chat_session_id),
+    )
+    # Generate the opening assistant turn.
+    try:
+        first_msg = _onb.generate_initial_assistant_turn(brand_name, brand_url, crawl.get("context", ""))
+    except Exception as exc:
+        first_msg = (
+            f"Hi — I'm here to help build a Signal Room brief for {brand_name}. "
+            f"(The auto-kickoff hit an issue: {exc}. Tell me anyway: who's the primary audience for this brand?)"
+        )
+    store.append_chat_message(chat_session_id, "assistant", first_msg)
+
+
+@app.get("/{brand}/passcode-reveal")
+def passcode_reveal(request: Request, brand: str, passcode: str = "") -> Any:
+    _allowed_brand(brand)
+    brand_row = store.get_brand(brand)
+    if not brand_row:
+        raise HTTPException(status_code=404)
+    if brand_row.get("passcode_revealed_at"):
+        # One-shot: don't re-show.
+        return templates.TemplateResponse(
+            request, "passcode_reveal.html",
+            {"brand": brand, "passcode": "", "already_revealed": True},
+        )
+    if not passcode:
+        raise HTTPException(status_code=400, detail="passcode query param required")
+    store.mark_passcode_revealed(brand)
+    return templates.TemplateResponse(
+        request, "passcode_reveal.html",
+        {"brand": brand, "passcode": passcode, "already_revealed": False},
+    )
+
+
+@app.get("/{brand}/auth")
+def auth_get(request: Request, brand: str, next: str = "", error: str = "") -> Any:
+    _allowed_brand(brand)
+    return templates.TemplateResponse(request, "passcode_gate.html",
+                                      {"brand": brand, "next": next or f"/{brand}", "error": error})
+
+
+@app.post("/{brand}/auth")
+def auth_post(brand: str, passcode: str = Form(...), next: str = Form("")) -> Any:
+    _allowed_brand(brand)
+    brand_row = store.get_brand(brand)
+    if not brand_row:
+        raise HTTPException(status_code=404)
+    from . import auth as _auth
+    if not _auth.verify_passcode(passcode, brand_row.get("passcode_hash", "")):
+        return RedirectResponse(url=f"/{brand}/auth?next={next}&error=wrong", status_code=303)
+    target = next if next.startswith("/") else f"/{brand}"
+    response = RedirectResponse(url=target, status_code=303)
+    _auth.set_passcode_cookie(response, brand, brand_row.get("passcode_session_token", ""))
+    return response
+
+
+@app.get("/{brand}/onboarding")
+def onboarding_page(request: Request, brand: str) -> Any:
+    _allowed_brand(brand)
+    brand_row = store.get_brand(brand)
+    if not brand_row:
+        raise HTTPException(status_code=404)
+    from . import auth as _auth
+    _auth.require_passcode_or_redirect(request, brand_row, next_path=f"/{brand}/onboarding")
+    session = store.latest_chat_session(brand, purpose="onboarding")
+    messages = store.get_chat_messages(session["id"]) if session else []
+    return templates.TemplateResponse(
+        request, "onboarding.html",
+        {
+            "brand": brand,
+            "brand_row": brand_row,
+            "session_id": session.get("id") if session else "",
+            "messages": messages,
+            "ready": any("READY_TO_GENERATE" in m.get("content", "") for m in messages if m.get("role") == "assistant"),
+            "session_closed": (session or {}).get("status") == "closed",
+        },
+    )
+
+
+@app.post("/api/brands/{brand}/onboarding/chat")
+async def onboarding_chat(brand: str, request: Request, body: dict = None) -> JSONResponse:
+    _allowed_brand(brand)
+    brand_row = store.get_brand(brand)
+    if not brand_row:
+        raise HTTPException(status_code=404)
+    from . import auth as _auth
+    if not _auth.has_valid_passcode(request, brand_row):
+        return JSONResponse({"ok": False, "error": "passcode required"}, status_code=401)
+    payload = await request.json()
+    user_msg = (payload.get("message") or "").strip()
+    session_id = payload.get("session_id") or ""
+    if not user_msg or not session_id:
+        return JSONResponse({"ok": False, "error": "session_id + message required"}, status_code=400)
+    session = store.get_chat_session(session_id)
+    if not session or session.get("brand_slug") != brand:
+        return JSONResponse({"ok": False, "error": "session not found"}, status_code=404)
+    if session.get("status") == "closed":
+        return JSONResponse({"ok": False, "error": "session closed"}, status_code=409)
+
+    store.append_chat_message(session_id, "user", user_msg)
+    messages = store.get_chat_messages(session_id)
+    history = [{"role": m["role"], "content": m["content"]} for m in messages if m["role"] in ("user", "assistant")]
+
+    from . import onboarding as _onb
+    try:
+        assistant_msg = _onb.next_assistant_turn(
+            brand_row.get("name") or brand,
+            brand_row.get("url") or "",
+            session.get("brand_context") or "",
+            history,
+        )
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": f"Claude call failed: {exc}"}, status_code=502)
+    store.append_chat_message(session_id, "assistant", assistant_msg)
+    return JSONResponse({
+        "ok": True,
+        "assistant": assistant_msg,
+        "ready_to_generate": _onb.is_ready_to_generate(assistant_msg),
+    })
+
+
+@app.post("/{brand}/onboarding/finalize")
+def onboarding_finalize(request: Request, brand: str) -> Any:
+    _allowed_brand(brand)
+    brand_row = store.get_brand(brand)
+    if not brand_row:
+        raise HTTPException(status_code=404)
+    from . import auth as _auth
+    _auth.require_passcode_or_redirect(request, brand_row, next_path=f"/{brand}/brief")
+    session = store.latest_chat_session(brand, purpose="onboarding")
+    if not session:
+        raise HTTPException(status_code=400, detail="No onboarding session to finalize.")
+    messages = store.get_chat_messages(session["id"])
+    transcript = [{"role": m["role"], "content": m["content"]} for m in messages if m["role"] in ("user", "assistant")]
+    from . import onboarding as _onb
+    try:
+        brief = _onb.generate_brief(
+            brand_row.get("name") or brand,
+            brand_row.get("url") or "",
+            session.get("brand_context") or "",
+            transcript,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Brief generation failed: {exc}")
+    store.update_brand_brief(brand, brief)
+    store.close_chat_session(session["id"], generated_brief_json=brief)
+    # Mirror to filesystem so projector + planner CLI still work.
+    _mirror_brief_to_yaml(brand, brief)
+    return RedirectResponse(url=f"/{brand}/brief", status_code=303)
+
+
+def _mirror_brief_to_yaml(brand: str, brief: dict) -> None:
+    """Write brief.yaml mirror so the projector + planner CLIs see it.
+
+    The brief dict from the chat finalizer has a flat shape; we wrap it
+    in the `projection.signal_room.{pillars, discovery_queries, seed_sources}`
+    envelope that signal_room/projector/from_brief.py expects.
+    """
+    import yaml as _yaml
+    brand_dir = ROOT / "config" / "brands" / brand
+    brand_dir.mkdir(parents=True, exist_ok=True)
+    wrapped = {
+        "brand": {
+            "name": brief.get("name", brand),
+            "slug": brand,
+            "url": brief.get("url", ""),
+            "one_liner": brief.get("one_liner", ""),
+            "audience": brief.get("audience", []),
+        },
+        "projection": {
+            "signal_room": {
+                "pillars": brief.get("pillars", []),
+                "discovery_queries": brief.get("discovery_queries", []),
+                "seed_sources": brief.get("seed_sources", []),
+            },
+        },
+    }
+    (brand_dir / "brief.yaml").write_text(_yaml.safe_dump(wrapped, sort_keys=False, allow_unicode=True), encoding="utf-8")
+
+
+@app.get("/{brand}/brief")
+def brief_editor_get(request: Request, brand: str) -> Any:
+    _allowed_brand(brand)
+    brand_row = store.get_brand(brand)
+    if not brand_row:
+        raise HTTPException(status_code=404)
+    from . import auth as _auth
+    _auth.require_passcode_or_redirect(request, brand_row, next_path=f"/{brand}/brief")
+    return templates.TemplateResponse(
+        request, "brief_editor.html",
+        {"brand": brand, "brand_row": brand_row, "brief": brand_row.get("brief_json") or {}, "errors": {}, "saved": False},
+    )
+
+
+@app.post("/{brand}/brief")
+async def brief_editor_post(request: Request, brand: str) -> Any:
+    _allowed_brand(brand)
+    brand_row = store.get_brand(brand)
+    if not brand_row:
+        raise HTTPException(status_code=404)
+    from . import auth as _auth
+    _auth.require_passcode_or_redirect(request, brand_row, next_path=f"/{brand}/brief")
+    form = await request.form()
+    brief = _parse_brief_form(form, fallback=brand_row.get("brief_json") or {})
+    store.update_brand_brief(brand, brief)
+    store.update_brand_name(brand, brief.get("name", brand))
+    _mirror_brief_to_yaml(brand, brief)
+    return templates.TemplateResponse(
+        request, "brief_editor.html",
+        {"brand": brand, "brand_row": store.get_brand(brand), "brief": brief, "errors": {}, "saved": True},
+    )
+
+
+def _parse_brief_form(form, fallback: dict) -> dict:
+    """Parse the brief editor form fields into a BrandBrief-shaped dict.
+
+    Repeating sections (pillars / queries / seeds) use indexed names like
+    `pillar_0_name`, `pillar_0_keywords`, etc. We walk indices 0..N until
+    we hit the first empty pillar name (treat as end-of-list).
+    """
+    def _get(key: str, default: str = "") -> str:
+        v = form.get(key)
+        return v.strip() if isinstance(v, str) else default
+
+    out = {
+        "name": _get("name", fallback.get("name", "")),
+        "url": _get("url", fallback.get("url", "")),
+        "one_liner": _get("one_liner", fallback.get("one_liner", "")),
+        "audience": [line.strip() for line in _get("audience").splitlines() if line.strip()],
+        "pillars": [],
+        "discovery_queries": [],
+        "seed_sources": [],
+    }
+    for i in range(20):
+        pname = _get(f"pillar_{i}_name")
+        if not pname:
+            break
+        kws = [k.strip().lower() for k in _get(f"pillar_{i}_keywords").splitlines() if k.strip()]
+        out["pillars"].append({
+            "id": f"P{i+1}",
+            "name": pname,
+            "why": _get(f"pillar_{i}_why"),
+            "keywords": kws,
+        })
+    for i in range(30):
+        topic = _get(f"query_{i}_topic")
+        if not topic:
+            break
+        try:
+            prio = int(_get(f"query_{i}_priority", "2"))
+        except ValueError:
+            prio = 2
+        out["discovery_queries"].append({
+            "id": _get(f"query_{i}_id") or topic.lower().replace(" ", "-")[:40],
+            "priority": max(1, min(3, prio)),
+            "topic": topic,
+            "why": _get(f"query_{i}_why"),
+        })
+    for i in range(30):
+        u = _get(f"seed_{i}_url")
+        if not u:
+            break
+        out["seed_sources"].append({
+            "url": u,
+            "name": _get(f"seed_{i}_name") or u,
+            "category": _get(f"seed_{i}_category") or "other",
+            "why": _get(f"seed_{i}_why"),
+        })
+    return out
 
 
 def _demo_items(limit: int = 20) -> list[dict[str, Any]]:

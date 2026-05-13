@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Passcode · {{ brand }}{% endblock %}
+{% block content %}
+
+<section class="centered-form">
+  <p class="section-label">passcode required</p>
+  <h1 class="form-h1">Enter passcode for {{ brand }}</h1>
+  <form method="post" action="/{{ brand }}/auth" class="big-form">
+    <label class="big-label" for="passcode">Passcode</label>
+    <input type="password" name="passcode" id="passcode" autofocus required>
+    <input type="hidden" name="next" value="{{ next }}">
+    {% if error %}<p class="form-error">Wrong passcode. Try again.</p>{% endif %}
+    <button type="submit" class="primary-action">Unlock</button>
+  </form>
+</section>
+
+{% endblock %}

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Signal Room — brands{% endblock %}
+{% block content %}
+
+<section class="home-hero">
+  <p class="section-label">brands</p>
+  <h1 class="home-title">Signal Room</h1>
+  <p class="home-sub">Press-worthy signal for any brand. Auto-curated queries. Trace every step.</p>
+  <a href="/onboarding/start" class="primary-action home-cta">Create new brand</a>
+</section>
+
+{% if has_brands %}
+<section class="brand-grid">
+  {% for b in brands %}
+    <a href="/{{ b.slug }}" class="brand-card">
+      <div class="brand-card-name">{{ b.name or b.slug }}{% if b.legacy %} <span class="brand-card-tag">legacy</span>{% endif %}</div>
+      {% if b.url %}<div class="brand-card-url mono">{{ b.url }}</div>{% endif %}
+      <div class="brand-card-meta">
+        {% if b.last_refetched_at %}
+          <span>last refetch: {{ b.last_refetched_at }}</span>
+        {% else %}
+          <span class="dim">no runs yet</span>
+        {% endif %}
+      </div>
+    </a>
+  {% endfor %}
+</section>
+{% else %}
+<section class="empty">
+  <p>No brands yet. <a href="/onboarding/start">Create your first brand</a> to begin.</p>
+</section>
+{% endif %}
+
+{% endblock %}

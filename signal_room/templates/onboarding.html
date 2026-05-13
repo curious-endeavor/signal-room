@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Onboarding · {{ brand }}{% endblock %}
+{% block content %}
+
+<section class="onboarding">
+  <p class="section-label">step 3 of 3 · interview</p>
+  <h1 class="form-h1">Onboarding {{ brand_row.name or brand }}</h1>
+  <p class="form-sub">A few questions to build your brief. ~3 minutes.</p>
+
+  {% if not session_id %}
+    <p class="form-error">No onboarding session yet — kicking off the crawl. <a href="">Refresh</a> in a few seconds.</p>
+  {% else %}
+    <div id="chat-log" class="chat-log" data-session-id="{{ session_id }}">
+      {% for m in messages %}
+        <div class="msg msg-{{ m.role }}">
+          <div class="msg-body">{{ m.content }}</div>
+        </div>
+      {% endfor %}
+      {% if not messages %}
+        <div class="msg msg-assistant">
+          <div class="msg-body"><em>Crawling your site… first question coming up in ~30 seconds. Refresh if it doesn't appear.</em></div>
+        </div>
+      {% endif %}
+    </div>
+
+    {% if session_closed %}
+      <p class="dim">Session closed. <a href="/{{ brand }}/brief" class="text-link">→ View your brief</a></p>
+    {% else %}
+      <form id="chat-form" class="chat-form" data-session-id="{{ session_id }}">
+        <textarea id="chat-input" name="message" placeholder="Type your answer…" rows="2" autofocus></textarea>
+        <button type="submit" class="primary-action">Send</button>
+      </form>
+
+      {% if ready %}
+        <form method="post" action="/{{ brand }}/onboarding/finalize" class="finalize-form">
+          <button type="submit" class="primary-action finalize-btn">Generate brief & finish →</button>
+        </form>
+      {% else %}
+        <div id="finalize-slot"></div>
+      {% endif %}
+    {% endif %}
+  {% endif %}
+</section>
+
+<script>
+(function () {
+  const log = document.getElementById('chat-log');
+  const form = document.getElementById('chat-form');
+  const input = document.getElementById('chat-input');
+  const finalizeSlot = document.getElementById('finalize-slot');
+  if (!form) return;
+  const sessionId = form.dataset.sessionId;
+
+  function appendMessage(role, body) {
+    const div = document.createElement('div');
+    div.className = 'msg msg-' + role;
+    const inner = document.createElement('div');
+    inner.className = 'msg-body';
+    inner.textContent = body;
+    div.appendChild(inner);
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function setLoading(on) {
+    input.disabled = on;
+    form.querySelector('button').disabled = on;
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text) return;
+    appendMessage('user', text);
+    input.value = '';
+    setLoading(true);
+    appendMessage('assistant-typing', '…');
+    try {
+      const r = await fetch('/api/brands/{{ brand }}/onboarding/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId, message: text }),
+      });
+      const data = await r.json();
+      // Remove the typing indicator
+      const last = log.querySelector('.msg-assistant-typing:last-child');
+      if (last) last.remove();
+      if (!data.ok) {
+        appendMessage('error', 'Error: ' + (data.error || 'unknown'));
+        return;
+      }
+      appendMessage('assistant', data.assistant);
+      if (data.ready_to_generate && finalizeSlot && !finalizeSlot.querySelector('form')) {
+        finalizeSlot.innerHTML = '<form method="post" action="/{{ brand }}/onboarding/finalize" class="finalize-form"><button type="submit" class="primary-action finalize-btn">Generate brief &amp; finish →</button></form>';
+      }
+    } catch (err) {
+      const last = log.querySelector('.msg-assistant-typing:last-child');
+      if (last) last.remove();
+      appendMessage('error', 'Network error: ' + err.message);
+    } finally {
+      setLoading(false);
+      input.focus();
+    }
+  });
+})();
+</script>
+
+{% endblock %}

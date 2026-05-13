@@ -348,8 +348,23 @@ def _queries_drilldown(state):
     rows = []
     brand = state.get("brand", "")
     for q in state["queries"]:
+        def _src_hint(src: str, url: str) -> str:
+            s = (src or "").lower()
+            # X requires login to view individual posts; same for some Instagram/TikTok.
+            if s.startswith("x") or "x.com" in url or "twitter.com" in url:
+                return " <span class='login-hint' title='X requires login to view individual posts'>(needs X login)</span>"
+            if "instagram" in s or "instagram.com" in url:
+                return " <span class='login-hint' title='Instagram requires login'>(needs IG login)</span>"
+            return ""
         samples_html = "".join(
-            f"<li>{_h(s.get('title',''))} <span class='dim mono'>· {_h(s.get('source',''))}</span></li>"
+            (
+                f"<li><a href='{_h(s.get('source_url',''))}' target='_blank' rel='noreferrer' class='sample-link'>"
+                f"{_h(s.get('title','(untitled)'))}</a> <span class='dim mono'>· {_h(s.get('source',''))}</span>"
+                f"{_src_hint(s.get('source',''), s.get('source_url',''))}</li>"
+                if s.get("source_url") else
+                f"<li><span class='no-url'>{_h(s.get('title','(untitled)'))}</span> "
+                f"<span class='dim mono'>· {_h(s.get('source',''))} · no url</span></li>"
+            )
             for s in q["samples"]
         ) or "<li class='dim'>nothing returned</li>"
 
@@ -399,10 +414,26 @@ def _vendor_processing_html(report: Dict[str, Any]) -> str:
     raw_topic = query_plan.get("raw_topic", "")
     intent = query_plan.get("intent", "—")
     freshness = query_plan.get("freshness_mode", "—")
-    planner_model = provider_runtime.get("planner_model", "—")
     plan_source = artifacts.get("plan_source", "—")
     plan_notes = query_plan.get("notes") or []
     used_fallback = any("fallback" in str(n).lower() for n in plan_notes)
+    # When plan_source is "external", WE supplied the plan — the vendor's
+    # internal grok planner did not run. Show who actually generated the plan.
+    # When plan_source is "internal" or "deterministic", the vendor's planner
+    # ran (or fell back), so show the vendor's configured planner_model.
+    vendor_planner = provider_runtime.get("planner_model", "—")
+    if plan_source == "external":
+        # Pull the actual model from our planner's notes line if present.
+        sr_note = next((n for n in plan_notes if "planner=signal-room" in str(n)), "")
+        # Format: "planner=signal-room (claude-sonnet-4-6)"
+        sr_model = "claude"
+        if "(" in sr_note and ")" in sr_note:
+            sr_model = sr_note.split("(", 1)[1].split(")", 1)[0] or "claude"
+        planner_label = f"Signal Room · {sr_model}"
+        planner_origin = "external"
+    else:
+        planner_label = vendor_planner
+        planner_origin = plan_source
 
     # The transformation: raw topic → planner intent + subqueries.
     subqueries = query_plan.get("subqueries") or []
@@ -498,7 +529,7 @@ def _vendor_processing_html(report: Dict[str, Any]) -> str:
     <span><b>intent</b> {_h(intent)}</span>
     <span><b>freshness</b> {_h(freshness)}</span>
     <span><b>range</b> {_h(range_from)} → {_h(range_to)}</span>
-    <span><b>planner</b> {_h(planner_model)} <span class="dim">({_h(plan_source)})</span></span>
+    <span><b>planner</b> {_h(planner_label)} <span class="dim">({_h(planner_origin)})</span></span>
     {'<span class="vendor-fallback">⚠ planner fell back</span>' if used_fallback else ''}
   </div>
 
@@ -689,6 +720,10 @@ a:hover { color: var(--ce-red); }
 .bare-list { list-style: none; padding: 0; margin: 4px 0 0; }
 .bare-list li { padding: 4px 0; color: var(--ce-ink); font-size: 13px; line-height: 1.5; border-bottom: 1px dotted var(--ce-border); }
 .bare-list li:last-child { border-bottom: none; }
+.bare-list a.sample-link { color: var(--ce-black); }
+.bare-list a.sample-link:hover { color: var(--ce-red); text-decoration: underline; }
+.bare-list .no-url { color: var(--ce-grey); cursor: not-allowed; }
+.bare-list .login-hint { font-family: var(--mono); font-size: 10px; color: var(--ce-light); padding-left: 4px; cursor: help; }
 .code { margin: 4px 0; padding: var(--s-3); border: 1px solid var(--ce-border); border-radius: var(--r-2); background: var(--ce-bg); color: var(--ce-ink); font-family: var(--mono); font-size: 11.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; overflow-x: auto; max-height: 280px; overflow-y: auto; }
 .digest-row { display: grid; grid-template-columns: 36px 1fr auto; gap: var(--s-3); align-items: center; padding: var(--s-3) 0; border-bottom: var(--hair); }
 .digest-rank { color: var(--ce-light); font-size: 12px; }
@@ -731,5 +766,31 @@ _PAGE_SHELL = """<!DOCTYPE html>
 <link rel="stylesheet" href="https://use.typekit.net/ffj8sbd.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap">
 <style>{css}</style>
+<script>
+// Open any <details> whose id matches the URL hash, and any <details> ancestor
+// of the hash target. Then scroll into view. Browsers don't auto-open <details>
+// on anchor navigation by default, so jumps from the funnel bars looked like
+// no-ops without this. Runs on initial load + hashchange.
+(function() {{
+  function openHashTarget() {{
+    var hash = (location.hash || "").replace(/^#/, "");
+    if (!hash) return;
+    try {{ hash = decodeURIComponent(hash); }} catch (e) {{}}
+    var el = document.getElementById(hash);
+    if (!el) return;
+    var cur = el;
+    while (cur && cur !== document.body) {{
+      if (cur.tagName === "DETAILS") cur.open = true;
+      cur = cur.parentElement;
+    }}
+    // Re-scroll after opening (the opening changes layout heights).
+    requestAnimationFrame(function() {{
+      el.scrollIntoView({{ behavior: "smooth", block: "start" }});
+    }});
+  }}
+  window.addEventListener("DOMContentLoaded", openHashTarget);
+  window.addEventListener("hashchange", openHashTarget);
+}})();
+</script>
 </head><body>{body}</body></html>
 """

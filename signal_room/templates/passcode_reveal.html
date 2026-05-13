@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Save your passcode · {{ brand }}{% endblock %}
+{% block content %}
+
+<section class="centered-form">
+  {% if already_revealed %}
+    <p class="section-label">passcode already shown</p>
+    <h1 class="form-h1">Already revealed</h1>
+    <p>The passcode for <strong>{{ brand }}</strong> was shown once and can't be displayed again.</p>
+    <p>If you lost it, you'll need to reset via the CLI (`signal-room reset-passcode --brand {{ brand }}`).</p>
+    <p><a href="/{{ brand }}" class="text-link">→ {{ brand }}'s page</a></p>
+  {% else %}
+    <p class="section-label">step 2 of 3 · save this</p>
+    <h1 class="form-h1">Your passcode</h1>
+    <p>This is your only chance to copy this. You'll need it to edit or refetch <strong>{{ brand }}</strong>.</p>
+    <div class="passcode-box mono">{{ passcode }}</div>
+    <p class="dim">We've set a cookie so you don't need to enter it right now. Save it anyway — you'll need it on other devices.</p>
+    <a href="/{{ brand }}/onboarding" class="primary-action">I've saved it — continue onboarding</a>
+  {% endif %}
+</section>
+
+{% endblock %}

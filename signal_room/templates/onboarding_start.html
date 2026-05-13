@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Create new brand · Signal Room{% endblock %}
+{% block content %}
+
+<section class="centered-form">
+  <p class="section-label">step 1 of 3 · paste your URL</p>
+  <h1 class="form-h1">What's your brand's homepage?</h1>
+  <p class="form-sub">We'll crawl your site, then ask you a few questions to build your brief.</p>
+
+  <form method="post" action="/onboarding/start" class="big-form">
+    <label class="big-label" for="url">Homepage URL</label>
+    <input type="url" name="url" id="url" placeholder="https://alice.io" value="{{ url|default('') }}" required autofocus>
+    <label class="big-label" for="name">Brand name <span class="dim">(optional — we'll guess from the URL)</span></label>
+    <input type="text" name="name" id="name" placeholder="Alice">
+    {% if error %}<p class="form-error">{{ error }}</p>{% endif %}
+    <button type="submit" class="primary-action">Begin onboarding</button>
+  </form>
+</section>
+
+{% endblock %}

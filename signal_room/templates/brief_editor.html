@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Brief · {{ brand }}{% endblock %}
+{% block content %}
+
+<section class="brief-editor">
+  <p class="section-label">brief editor · {{ brand }}</p>
+  <h1 class="form-h1">{{ brief.name or brand }}'s brief</h1>
+  <p class="form-sub">Edit any field. Save when done. Your changes flow into every refetch.</p>
+
+  {% if saved %}
+    <p class="toast">Brief saved · <a href="/{{ brand }}" class="text-link">→ Run a fresh refetch</a></p>
+  {% endif %}
+
+  <form method="post" action="/{{ brand }}/brief" class="brief-form">
+    <fieldset class="brief-section">
+      <legend>Basics</legend>
+      <label class="field-label">Brand name</label>
+      <input type="text" name="name" value="{{ brief.name|default('') }}">
+      <label class="field-label">Homepage URL</label>
+      <input type="url" name="url" value="{{ brief.url|default('') }}">
+      <label class="field-label">One-liner <span class="dim">(single sentence positioning)</span></label>
+      <textarea name="one_liner" rows="2">{{ brief.one_liner|default('') }}</textarea>
+      <label class="field-label">Audience <span class="dim">(one per line)</span></label>
+      <textarea name="audience" rows="3">{% if brief.audience %}{{ brief.audience|join('\n') }}{% endif %}</textarea>
+    </fieldset>
+
+    <fieldset class="brief-section">
+      <legend>Pillars <span class="dim">(3–5 things this brand wants to be known for)</span></legend>
+      {% set pillars = brief.pillars or [] %}
+      {% for n in range(5) %}
+        {% set p = pillars[n] if n < pillars|length else None %}
+        <div class="repeating">
+          <label class="field-label">Pillar {{ n+1 }} name</label>
+          <input type="text" name="pillar_{{ n }}_name" value="{{ p.name|default('') if p else '' }}">
+          <label class="field-label">Why this pillar</label>
+          <textarea name="pillar_{{ n }}_why" rows="2">{{ p.why|default('') if p else '' }}</textarea>
+          <label class="field-label">Keywords <span class="dim">(one per line)</span></label>
+          <textarea name="pillar_{{ n }}_keywords" rows="4">{% if p and p.keywords %}{{ p.keywords|join('\n') }}{% endif %}</textarea>
+        </div>
+      {% endfor %}
+    </fieldset>
+
+    <fieldset class="brief-section">
+      <legend>Discovery queries <span class="dim">(what to search for — these drive every refetch)</span></legend>
+      {% set queries = brief.discovery_queries or [] %}
+      {% for n in range(10) %}
+        {% set q = queries[n] if n < queries|length else None %}
+        <div class="repeating">
+          <div class="repeating-row">
+            <div class="repeating-col">
+              <label class="field-label">Query {{ n+1 }} topic</label>
+              <input type="text" name="query_{{ n }}_topic" value="{{ q.topic|default('') if q else '' }}">
+            </div>
+            <div class="repeating-col-small">
+              <label class="field-label">Priority</label>
+              <select name="query_{{ n }}_priority">
+                {% for v in [1, 2, 3] %}
+                  <option value="{{ v }}" {% if q and q.priority == v %}selected{% endif %}>{{ v }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <label class="field-label">Why this query</label>
+          <textarea name="query_{{ n }}_why" rows="2">{{ q.why|default('') if q else '' }}</textarea>
+        </div>
+      {% endfor %}
+    </fieldset>
+
+    <fieldset class="brief-section">
+      <legend>Seed sources <span class="dim">(URLs to weight higher in results)</span></legend>
+      {% set seeds = brief.seed_sources or [] %}
+      {% for n in range(10) %}
+        {% set s = seeds[n] if n < seeds|length else None %}
+        <div class="repeating">
+          <div class="repeating-row">
+            <div class="repeating-col">
+              <label class="field-label">URL</label>
+              <input type="url" name="seed_{{ n }}_url" value="{{ s.url|default('') if s else '' }}">
+            </div>
+            <div class="repeating-col-small">
+              <label class="field-label">Category</label>
+              <input type="text" name="seed_{{ n }}_category" value="{{ s.category|default('') if s else '' }}">
+            </div>
+          </div>
+          <label class="field-label">Name</label>
+          <input type="text" name="seed_{{ n }}_name" value="{{ s.name|default('') if s else '' }}">
+          <label class="field-label">Why</label>
+          <textarea name="seed_{{ n }}_why" rows="2">{{ s.why|default('') if s else '' }}</textarea>
+        </div>
+      {% endfor %}
+    </fieldset>
+
+    <div class="form-actions">
+      <button type="submit" class="primary-action">Save brief</button>
+      <a href="/{{ brand }}" class="text-link">Cancel</a>
+    </div>
+  </form>
+</section>
+
+{% endblock %}

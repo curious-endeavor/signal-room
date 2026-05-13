@@ -126,7 +126,7 @@ def fetch_last30days(
                 "item_count": len(run["items"]),
                 "sample_items": [
                     {
-                        "title": it.get("title", "")[:160],
+                        "title": (it.get("title") or "")[:400],
                         "source": it.get("source", ""),
                         "source_url": it.get("source_url", ""),
                         "date": it.get("date", ""),
@@ -165,7 +165,7 @@ def fetch_last30days(
                     "item_count": len(run["items"]),
                     "sample_items": [
                         {
-                            "title": it.get("title", "")[:160],
+                            "title": (it.get("title") or "")[:400],
                             "source": it.get("source", ""),
                             "source_url": it.get("source_url", ""),
                             "date": it.get("date", ""),

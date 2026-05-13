@@ -691,3 +691,72 @@ details summary {
   border-radius: var(--r-2);
   background: #fff;
 }
+
+/* ============================================================================
+   U7/U8 — Home page, onboarding flow, brief editor (plan 004)
+   ============================================================================ */
+
+.home-hero { padding: var(--s-6) 0 var(--s-5); text-align: left; max-width: var(--measure); }
+.home-title { font-family: var(--serif); font-size: clamp(44px, 6vw, 72px); font-weight: 400; line-height: 1; letter-spacing: -0.02em; color: var(--ce-black); margin: 6px 0; }
+.home-title::after { content: "."; color: var(--ce-red); }
+.home-sub { max-width: 60ch; color: var(--ce-grey); font-size: 16px; margin: 0 0 var(--s-4); }
+.home-cta { display: inline-block; margin-bottom: var(--s-5); }
+
+.brand-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--s-3); margin-top: var(--s-4); }
+.brand-card { display: block; padding: var(--s-4); border: 1px solid var(--ce-border); border-radius: var(--r-3); background: #fff; color: var(--ce-ink); }
+.brand-card:hover { border-color: var(--ce-red); color: var(--ce-red); }
+.brand-card-name { font-family: var(--serif); font-size: 22px; line-height: 1.1; margin-bottom: 6px; color: var(--ce-black); }
+.brand-card-tag { color: var(--ce-light); font-family: var(--mono); font-size: 10px; padding: 1px 6px; border: 1px solid var(--ce-border); border-radius: var(--r-pill); text-transform: uppercase; }
+.brand-card-url { color: var(--ce-grey); font-size: 12px; margin-bottom: 8px; word-break: break-all; }
+.brand-card-meta { color: var(--ce-grey); font-size: 12px; }
+
+.empty { color: var(--ce-grey); padding: var(--s-5) 0; }
+.empty a { color: var(--ce-red); }
+
+/* Centered onboarding / passcode / form pages */
+.centered-form { max-width: 560px; margin: var(--s-6) auto 0; padding: 0 var(--s-3); }
+.form-h1 { font-family: var(--serif); font-size: clamp(28px, 4vw, 40px); font-weight: 400; line-height: 1.1; letter-spacing: -0.015em; margin: 6px 0 var(--s-3); }
+.form-sub { color: var(--ce-grey); margin-bottom: var(--s-4); }
+.big-form { display: flex; flex-direction: column; gap: var(--s-2); }
+.big-label { color: var(--ce-grey); font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; margin-top: var(--s-3); }
+.big-label .dim { color: var(--ce-light); text-transform: none; letter-spacing: 0; font-size: 11px; }
+.big-form input, .big-form textarea { width: 100%; min-height: 46px; border: 1px solid var(--ce-border); border-radius: var(--r-2); padding: 10px 14px; font-family: var(--sans); font-size: 15px; color: var(--ce-ink); background: #fff; }
+.big-form input:focus, .big-form textarea:focus { outline: none; border-color: var(--ce-black); }
+.big-form button { margin-top: var(--s-3); align-self: flex-start; }
+.form-error { color: var(--ce-red); font-size: 14px; margin: var(--s-2) 0 0; }
+
+.passcode-box { display: inline-block; padding: var(--s-3) var(--s-4); margin: var(--s-4) 0; border: 2px dashed var(--ce-red); border-radius: var(--r-2); font-family: var(--mono); font-size: 28px; color: var(--ce-red); background: var(--ce-red-soft); letter-spacing: 0.05em; user-select: all; }
+
+/* Onboarding chat */
+.onboarding { max-width: 760px; margin: var(--s-5) auto; padding: 0 var(--s-3); }
+.chat-log { margin: var(--s-4) 0; padding: var(--s-3); border: 1px solid var(--ce-border); border-radius: var(--r-3); background: #fff; max-height: 56vh; overflow-y: auto; display: flex; flex-direction: column; gap: var(--s-2); }
+.msg { max-width: 80%; padding: 10px 14px; border-radius: 14px; font-size: 14px; line-height: 1.5; }
+.msg-assistant, .msg-assistant-typing { align-self: flex-start; background: var(--ce-bg); color: var(--ce-ink); border-bottom-left-radius: 4px; }
+.msg-user { align-self: flex-end; background: var(--ce-red); color: #fff; border-bottom-right-radius: 4px; }
+.msg-error { align-self: center; background: var(--ce-red-soft); color: var(--ce-red); border: 1px solid var(--ce-red); }
+.msg-assistant-typing .msg-body { color: var(--ce-light); font-style: italic; }
+.msg-body { white-space: pre-wrap; word-break: break-word; }
+
+.chat-form { display: flex; gap: var(--s-2); align-items: end; margin-top: var(--s-3); }
+.chat-form textarea { flex: 1; resize: vertical; min-height: 50px; padding: 10px 14px; border: 1px solid var(--ce-border); border-radius: var(--r-2); font: inherit; }
+.chat-form textarea:focus { outline: none; border-color: var(--ce-black); }
+.chat-form button { min-height: 50px; }
+
+.finalize-form { margin-top: var(--s-4); padding-top: var(--s-3); border-top: var(--hair); }
+.finalize-btn { background: var(--ce-black); border-color: var(--ce-black); }
+
+/* Brief editor */
+.brief-editor { max-width: 760px; margin: var(--s-5) auto; padding: 0 var(--s-3); }
+.brief-form { margin-top: var(--s-4); }
+.brief-section { padding: var(--s-4); margin-bottom: var(--s-4); border: 1px solid var(--ce-border); border-radius: var(--r-3); background: #fff; }
+.brief-section legend { font-family: var(--mono); font-size: 11px; color: var(--ce-red); text-transform: uppercase; letter-spacing: 0.12em; padding: 0 8px; }
+.brief-section legend .dim { color: var(--ce-light); text-transform: none; letter-spacing: 0; }
+.field-label { display: block; color: var(--ce-grey); font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.10em; margin: var(--s-3) 0 4px; }
+.field-label .dim { color: var(--ce-light); text-transform: none; letter-spacing: 0; }
+.brief-form input, .brief-form textarea, .brief-form select { width: 100%; padding: 8px 12px; border: 1px solid var(--ce-border); border-radius: var(--r-2); font: inherit; font-size: 14px; background: #fff; }
+.brief-form input:focus, .brief-form textarea:focus { outline: none; border-color: var(--ce-black); }
+.repeating { padding: var(--s-3); margin-top: var(--s-2); border: 1px dashed var(--ce-border); border-radius: var(--r-2); background: var(--ce-bg); }
+.repeating-row { display: grid; grid-template-columns: 3fr 1fr; gap: var(--s-2); }
+.repeating-col-small { min-width: 0; }
+.form-actions { display: flex; gap: var(--s-3); align-items: center; margin-top: var(--s-4); }
+.toast { padding: 10px 14px; background: var(--ce-red-soft); border: 1px solid var(--ce-red); border-radius: var(--r-2); color: var(--ce-red); margin-bottom: var(--s-3); }

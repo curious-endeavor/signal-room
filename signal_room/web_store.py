@@ -161,6 +161,109 @@ class SignalRoomStore:
         rows = self.fetchall("select action, count(*) as count from feedback_events group by action", ())
         return {str(row["action"]): int(row["count"]) for row in rows}
 
+    # ----- brands (the editable brand entity) -----
+
+    def create_brand(self, slug: str, name: str, url: str, brief_json: dict = None,
+                     passcode_hash: str = "", passcode_session_token: str = "") -> None:
+        now = _now()
+        self.execute(
+            """
+            insert into brands (slug, name, url, brief_json, passcode_hash, passcode_session_token,
+                                passcode_revealed_at, created_at, updated_at, last_refetched_at)
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (slug, name, url, json.dumps(brief_json or {}), passcode_hash, passcode_session_token,
+             "", now, now, ""),
+        )
+
+    def get_brand(self, slug: str) -> dict[str, Any]:
+        rows = self.fetchall("select * from brands where slug = ?", (slug,))
+        return _decode_brand(rows[0]) if rows else {}
+
+    def list_brands(self, limit: int = 100) -> list[dict[str, Any]]:
+        rows = self.fetchall(
+            "select slug, name, url, created_at, updated_at, last_refetched_at from brands order by created_at desc limit ?",
+            (limit,),
+        )
+        return [_decode_brand(row) for row in rows]
+
+    def update_brand_brief(self, slug: str, brief_json: dict) -> None:
+        self.execute(
+            "update brands set brief_json = ?, updated_at = ? where slug = ?",
+            (json.dumps(brief_json or {}), _now(), slug),
+        )
+
+    def update_brand_name(self, slug: str, name: str) -> None:
+        self.execute(
+            "update brands set name = ?, updated_at = ? where slug = ?",
+            (name, _now(), slug),
+        )
+
+    def mark_brand_refetched(self, slug: str) -> None:
+        self.execute(
+            "update brands set last_refetched_at = ? where slug = ?",
+            (_now(), slug),
+        )
+
+    def set_brand_passcode(self, slug: str, passcode_hash: str, passcode_session_token: str) -> None:
+        self.execute(
+            "update brands set passcode_hash = ?, passcode_session_token = ?, updated_at = ? where slug = ?",
+            (passcode_hash, passcode_session_token, _now(), slug),
+        )
+
+    def mark_passcode_revealed(self, slug: str) -> None:
+        # One-shot reveal: only set if currently empty.
+        self.execute(
+            "update brands set passcode_revealed_at = ? where slug = ? and passcode_revealed_at = ''",
+            (_now(), slug),
+        )
+
+    # ----- chat_sessions + chat_messages -----
+
+    def create_chat_session(self, brand_slug: str, purpose: str = "onboarding", brand_context: str = "") -> str:
+        session_id = uuid.uuid4().hex[:12]
+        self.execute(
+            """
+            insert into chat_sessions (id, brand_slug, purpose, status, brand_context,
+                                        generated_brief_json, created_at, closed_at)
+            values (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (session_id, brand_slug, purpose, "active", brand_context, "", _now(), ""),
+        )
+        return session_id
+
+    def get_chat_session(self, session_id: str) -> dict[str, Any]:
+        rows = self.fetchall("select * from chat_sessions where id = ?", (session_id,))
+        return _decode_chat_session(rows[0]) if rows else {}
+
+    def latest_chat_session(self, brand_slug: str, purpose: str = "onboarding") -> dict[str, Any]:
+        rows = self.fetchall(
+            "select * from chat_sessions where brand_slug = ? and purpose = ? order by created_at desc limit 1",
+            (brand_slug, purpose),
+        )
+        return _decode_chat_session(rows[0]) if rows else {}
+
+    def append_chat_message(self, session_id: str, role: str, content: str) -> str:
+        message_id = uuid.uuid4().hex[:12]
+        self.execute(
+            "insert into chat_messages (id, session_id, role, content, created_at) values (?, ?, ?, ?, ?)",
+            (message_id, session_id, role, content, _now()),
+        )
+        return message_id
+
+    def get_chat_messages(self, session_id: str) -> list[dict[str, Any]]:
+        rows = self.fetchall(
+            "select * from chat_messages where session_id = ? order by created_at asc",
+            (session_id,),
+        )
+        return [dict(row) for row in rows]
+
+    def close_chat_session(self, session_id: str, generated_brief_json: dict = None) -> None:
+        self.execute(
+            "update chat_sessions set status = ?, closed_at = ?, generated_brief_json = ? where id = ?",
+            ("closed", _now(), json.dumps(generated_brief_json or {}), session_id),
+        )
+
     # ----- brand_runs (per-brand pipeline runs surfaced to web) -----
 
     def create_brand_run(self, brand: str) -> str:
@@ -305,6 +408,47 @@ class SignalRoomStore:
 def _schema_sql(id_type: str) -> list[str]:
     return [
         """
+        create table if not exists brands (
+          slug text primary key,
+          name text not null default '',
+          url text not null default '',
+          brief_json text not null default '{}',
+          passcode_hash text not null default '',
+          passcode_session_token text not null default '',
+          passcode_revealed_at text not null default '',
+          created_at text not null,
+          updated_at text not null,
+          last_refetched_at text not null default ''
+        )
+        """,
+        """
+        create table if not exists chat_sessions (
+          id text primary key,
+          brand_slug text not null,
+          purpose text not null default 'onboarding',
+          status text not null default 'active',
+          brand_context text not null default '',
+          generated_brief_json text not null default '',
+          created_at text not null,
+          closed_at text not null default ''
+        )
+        """,
+        """
+        create index if not exists chat_sessions_brand_idx on chat_sessions (brand_slug, created_at desc)
+        """,
+        """
+        create table if not exists chat_messages (
+          id text primary key,
+          session_id text not null,
+          role text not null,
+          content text not null,
+          created_at text not null
+        )
+        """,
+        """
+        create index if not exists chat_messages_session_idx on chat_messages (session_id, created_at asc)
+        """,
+        """
         create table if not exists brand_runs (
           id text primary key,
           brand text not null,
@@ -390,6 +534,36 @@ def _translate_sql(sql: str, is_postgres: bool) -> str:
         else:
             out.append(char)
     return "".join(out)
+
+
+def _decode_brand(row: dict[str, Any]) -> dict[str, Any]:
+    if not row:
+        return {}
+    out = dict(row)
+    raw = out.get("brief_json")
+    if raw is None or raw == "":
+        out["brief_json"] = {}
+    elif isinstance(raw, str):
+        try:
+            out["brief_json"] = json.loads(raw)
+        except json.JSONDecodeError:
+            out["brief_json"] = {}
+    return out
+
+
+def _decode_chat_session(row: dict[str, Any]) -> dict[str, Any]:
+    if not row:
+        return {}
+    out = dict(row)
+    raw = out.get("generated_brief_json")
+    if raw is None or raw == "":
+        out["generated_brief_json"] = {}
+    elif isinstance(raw, str):
+        try:
+            out["generated_brief_json"] = json.loads(raw)
+        except json.JSONDecodeError:
+            out["generated_brief_json"] = {}
+    return out
 
 
 def _decode_brand_run(row: dict[str, Any]) -> dict[str, Any]:
