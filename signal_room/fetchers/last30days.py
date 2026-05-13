@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 from typing import Any, Dict, List, Optional
 
 from ..storage import CONFIG_DIR, LAST30DAYS_RUNS_DIR, ROOT, ensure_dirs, write_json
+from ..tracer import tracer
 
 
 DISCOVERY_QUERIES_PATH = CONFIG_DIR / "discovery_queries.json"
@@ -86,21 +87,61 @@ def fetch_last30days(
     run_root = run_root or (LAST30DAYS_RUNS_DIR / date.today().isoformat())
     parallelism = max(1, int(parallelism))
 
+    tracer.record("last30days_started", {
+        "query_count": len(queries),
+        "mock": mock,
+        "lookback_days": lookback_days,
+        "parallelism": parallelism,
+        "queries": [
+            {"id": q.get("id"), "topic": q.get("topic"), "priority": q.get("priority"),
+             "search_text": q.get("search_text"), "why": q.get("why")}
+            for q in queries
+        ],
+    })
+
     all_items: List[Dict[str, Any]] = []
     runs: List[Dict[str, Any]] = []
     errors: List[Dict[str, str]] = []
     if parallelism == 1:
         for query in queries:
+            tracer.record("query_fired", {
+                "query_id": str(query.get("id", "")),
+                "topic": query.get("topic"),
+                "search_text": query.get("search_text") or query.get("topic"),
+                "priority": query.get("priority"),
+            })
             try:
                 run = _run_query(query, mock=mock, search_sources=search_sources, run_root=run_root)
             except Last30DaysError as exc:
                 if not continue_on_error:
                     raise
                 errors.append({"query_id": str(query.get("id", "")), "error": str(exc)})
+                tracer.record("query_error", {"query_id": str(query.get("id", "")), "error": str(exc)})
                 continue
             runs.append(run)
             all_items.extend(run["items"])
+            tracer.record("items_returned", {
+                "query_id": run["query_id"],
+                "topic": run["topic"],
+                "item_count": len(run["items"]),
+                "sample_items": [
+                    {
+                        "title": it.get("title", "")[:160],
+                        "source": it.get("source", ""),
+                        "source_url": it.get("source_url", ""),
+                        "date": it.get("date", ""),
+                    }
+                    for it in run["items"][:25]
+                ],
+            })
     else:
+        for query in queries:
+            tracer.record("query_fired", {
+                "query_id": str(query.get("id", "")),
+                "topic": query.get("topic"),
+                "search_text": query.get("search_text") or query.get("topic"),
+                "priority": query.get("priority"),
+            })
         with ThreadPoolExecutor(max_workers=parallelism) as executor:
             future_map = {
                 executor.submit(_run_query, query, mock, search_sources, run_root): query
@@ -114,9 +155,24 @@ def fetch_last30days(
                     if not continue_on_error:
                         raise
                     errors.append({"query_id": str(query.get("id", "")), "error": str(exc)})
+                    tracer.record("query_error", {"query_id": str(query.get("id", "")), "error": str(exc)})
                     continue
                 runs.append(run)
                 all_items.extend(run["items"])
+                tracer.record("items_returned", {
+                    "query_id": run["query_id"],
+                    "topic": run["topic"],
+                    "item_count": len(run["items"]),
+                    "sample_items": [
+                        {
+                            "title": it.get("title", "")[:160],
+                            "source": it.get("source", ""),
+                            "source_url": it.get("source_url", ""),
+                            "date": it.get("date", ""),
+                        }
+                        for it in run["items"][:25]
+                    ],
+                })
 
     runs.sort(key=lambda run: (int(run.get("priority", 999)), run["query_id"]))
 
@@ -156,6 +212,11 @@ def fetch_last30days(
     }
     if output_path:
         summary["discovered_items_path"] = str(output_path)
+    tracer.record("last30days_complete", {
+        "query_count": len(runs),
+        "total_item_count": len(all_items),
+        "error_count": len(errors),
+    })
     return summary
 
 

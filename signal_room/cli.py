@@ -30,6 +30,8 @@ def main(argv: Sequence[str] = None) -> int:
     run_parser.add_argument("--fetch-mock", action="store_true", help="Run the live discovery backend in mock mode")
     run_parser.add_argument("--fetch-query-limit", type=int, default=0, help="Limit how many discovery queries to run")
     run_parser.add_argument("--fetch-lookback-days", type=int, default=0, help="Override last30days lookback window in days")
+    run_parser.add_argument("--fetch-parallelism", type=int, default=4, help="How many discovery queries to fire in parallel (default 4)")
+    run_parser.add_argument("--fetch-sources", default="", help="Comma-separated last30days search sources (default: all from config)")
     run_parser.add_argument(
         "--fixtures-only",
         action="store_true",
@@ -38,6 +40,11 @@ def main(argv: Sequence[str] = None) -> int:
     run_parser.add_argument("--emit", choices=["text", "json"], default="text")
     run_parser.add_argument("--brief", type=Path, default=None, help="Path to brief.yaml — switches to LLM-based scoring")
     run_parser.add_argument("--llm-model", default="claude-sonnet-4-6", help="Model for LLM scoring")
+    run_parser.add_argument("--trace", action="store_true", help="Record a per-stage trace and emit HTML to data/traces/")
+    run_parser.add_argument("--trace-brand", default="", help="Override brand name for trace filename (default: inferred from --brief)")
+    run_parser.add_argument("--no-open", action="store_true", help="Skip auto-opening the trace HTML")
+    run_parser.add_argument("--brand-config-dir", type=Path, default=None, help="Per-brand config dir (default: inferred from --brief, e.g. config/brands/<slug>/)")
+    run_parser.add_argument("--data-suffix", default="", help="Per-brand data subdir name (default: inferred from --brief; '' = shared data/)")
 
     fetch_parser = subparsers.add_parser("fetch", help="Fetch discovery items from a backend")
     fetch_parser.add_argument("--backend", choices=["last30days"], required=True)
@@ -88,6 +95,14 @@ def main(argv: Sequence[str] = None) -> int:
 
     args = parser.parse_args(argv)
     if args.command == "run":
+        fetch_sources_list = [s.strip() for s in args.fetch_sources.split(",") if s.strip()] or None
+        inferred_slug = _infer_brand_from_brief(args.brief) if getattr(args, "brief", None) else ""
+        brand_config_dir = args.brand_config_dir
+        if brand_config_dir is None and inferred_slug:
+            cand = Path("config") / "brands" / inferred_slug
+            if cand.exists():
+                brand_config_dir = cand
+        data_suffix = args.data_suffix or inferred_slug or ""
         run_kwargs = {
             "limit": args.limit,
             "discovered_path": DISCOVERED_ITEMS_PATH,
@@ -96,13 +111,39 @@ def main(argv: Sequence[str] = None) -> int:
             "fetch_mock": args.fetch_mock,
             "fetch_query_limit": args.fetch_query_limit,
             "fetch_lookback_days": args.fetch_lookback_days,
+            "fetch_parallelism": args.fetch_parallelism,
+            "fetch_sources": fetch_sources_list,
+            "brand_config_dir": brand_config_dir,
+            "data_suffix": data_suffix,
         }
         if args.fixture:
             run_kwargs["fixture_path"] = args.fixture
         if getattr(args, "brief", None):
             run_kwargs["brief_path"] = args.brief
             run_kwargs["llm_model"] = args.llm_model
+
+        if getattr(args, "trace", False):
+            from .tracer import tracer
+            from .storage import DATA_DIR
+            brand = args.trace_brand or _infer_brand_from_brief(args.brief) or "unknown"
+            tracer.enable(brand=brand, run_dir=DATA_DIR / "traces")
+
         summary = run_pipeline(**run_kwargs)
+
+        if getattr(args, "trace", False):
+            from .tracer import tracer
+            jsonl_path = tracer.flush()
+            html_path = tracer.flush_html(jsonl_path=jsonl_path)
+            summary["trace_jsonl_path"] = str(jsonl_path) if jsonl_path else None
+            summary["trace_html_path"] = str(html_path) if html_path else None
+            if html_path and not args.no_open:
+                import subprocess, sys as _sys
+                opener = "open" if _sys.platform == "darwin" else "xdg-open"
+                try:
+                    subprocess.Popen([opener, str(html_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                except FileNotFoundError:
+                    pass
+
         _emit(summary, args.emit, "Signal Room digest generated")
         return 0
 
@@ -223,6 +264,21 @@ def main(argv: Sequence[str] = None) -> int:
 
     parser.error("Unknown command")
     return 2
+
+
+def _infer_brand_from_brief(brief_path) -> str:
+    """Pull brand slug from a brief path like config/brands/<slug>/brief.yaml."""
+    if not brief_path:
+        return ""
+    try:
+        parts = Path(brief_path).resolve().parts
+        if "brands" in parts:
+            i = parts.index("brands")
+            if i + 1 < len(parts):
+                return parts[i + 1]
+        return Path(brief_path).stem
+    except Exception:
+        return ""
 
 
 def _emit(payload: dict, emit: str, heading: str) -> None:

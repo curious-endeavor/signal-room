@@ -1,0 +1,106 @@
+{
+  "sources": [
+    {
+      "name": "ft.com",
+      "category": "tier1_press",
+      "url": "https://www.ft.com",
+      "reason": "Tier-1 PR target \u2014 Heretic campaign actively pitching FT."
+    },
+    {
+      "name": "nytimes.com",
+      "category": "tier1_press",
+      "url": "https://www.nytimes.com",
+      "reason": "Tier-1 PR target \u2014 NYT in active pursuit for Heretic."
+    },
+    {
+      "name": "wired.com",
+      "category": "tier1_press",
+      "url": "https://www.wired.com",
+      "reason": "Tier-1 PR target. Best fit for safety/security narratives."
+    },
+    {
+      "name": "reuters.com",
+      "category": "tier1_press",
+      "url": "https://www.reuters.com",
+      "reason": "Broad reach, follow-up PR target (NPR/Reuters maybe later)."
+    },
+    {
+      "name": "anthropic.com",
+      "category": "peer_research",
+      "url": "https://www.anthropic.com",
+      "reason": "Brand benchmark \u2014 research-as-content; Alice cites/partners with frontier labs."
+    },
+    {
+      "name": "irregular.io",
+      "category": "peer_research",
+      "url": "https://irregular.io",
+      "reason": "Closest research-peer benchmark \u2014 SOLVE framework, the work-IS-marketing model."
+    },
+    {
+      "name": "wiz.io",
+      "category": "brand_benchmark",
+      "url": "https://www.wiz.io",
+      "reason": "Security-brand tonal benchmark \u2014 \"security should feel empowering.\""
+    },
+    {
+      "name": "paloaltonetworks.com",
+      "category": "competitor_product",
+      "url": "https://www.paloaltonetworks.com",
+      "reason": "Per Tomer \u2014 primary product-side competitor to Alice/WonderSuite."
+    },
+    {
+      "name": "zscaler.com",
+      "category": "competitor_product",
+      "url": "https://www.zscaler.com",
+      "reason": "Per Tomer \u2014 primary product-side competitor to Alice/WonderSuite."
+    },
+    {
+      "name": "scale.com",
+      "category": "competitor_generalist",
+      "url": "https://scale.com",
+      "reason": "Per Tomer \u2014 Alice Labs generalist competitor (counter-positioning anchor)."
+    },
+    {
+      "name": "surgehq.ai",
+      "category": "competitor_generalist",
+      "url": "https://www.surgehq.ai",
+      "reason": "Per Tomer \u2014 Alice Labs generalist competitor."
+    },
+    {
+      "name": "prolific.com",
+      "category": "competitor_generalist",
+      "url": "https://www.prolific.com",
+      "reason": "Per Tomer \u2014 closest comparable on human evaluation; counter-position on specialism."
+    },
+    {
+      "name": "turing.com",
+      "category": "competitor_generalist",
+      "url": "https://www.turing.com",
+      "reason": "Per Tomer \u2014 moving toward post-training/RL territory; track encroachment into safety."
+    },
+    {
+      "name": "thehackernews.com",
+      "category": "security_trade",
+      "url": "https://thehackernews.com",
+      "reason": "Security trade publication \u2014 where AppSec / CISO readers go."
+    },
+    {
+      "name": "hackernews",
+      "category": "technical_community",
+      "url": "https://news.ycombinator.com",
+      "reason": "Where AI security tools get evaluated by builders."
+    },
+    {
+      "name": "schneier.com",
+      "category": "thought_leader",
+      "url": "https://www.schneier.com",
+      "reason": "Bruce Schneier's takes shape security-leader discourse."
+    },
+    {
+      "name": "huggingface.co",
+      "category": "research_community",
+      "url": "https://huggingface.co/papers",
+      "reason": "Where adversarial / safety papers surface first."
+    }
+  ]
+}

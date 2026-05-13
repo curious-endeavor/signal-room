@@ -1,0 +1,231 @@
+# Curious Endeavor — Signal Room brief
+# Reverse-engineered from the projected configs that were already on disk
+# (discovery_queries.json, pillar_keywords.json, seed_sources.json).
+# This is the canonical source: edit this, re-run the projector, configs update.
+
+brand:
+  name: Curious Endeavor
+  slug: ce
+  url: https://www.curiousendeavor.com
+  one_liner: >
+    AI-native brand studio. Senior brand thinking at AI execution speed.
+    "Weeks not months." Make · Run pricing — one-time setup plus a monthly
+    retainer cap, transparent CFO scenario tables, no scope creep.
+  voice_specimens:
+    - "The CFO scenario shows 20–60% cheaper than a senior in-house hire."
+    - "Make · Run is two line items. No surprise invoices."
+    - "We don't sell hours. We sell installed engines."
+  audience:
+    - CFOs and COOs at mid-market European companies evaluating agency vs. in-house
+    - Fractional / interim CMOs looking for execution leverage
+    - Founders/operators who want senior brand thinking without an agency retainer
+  business_model: >
+    Make (one-time positioning + brand asset generation) + Run (monthly retainer
+    with a hard cap, installed engines like Signal Room, Copy Engine, Outreach
+    Engine, that the client owns). EU AI Act compliant. Anchored to Clutch
+    pricing data and European salary benchmarks for the cost comparison.
+
+projection:
+  signal_room:
+
+    pillars:
+      - id: P1
+        name: CFO economics & pricing displacement
+        why: >
+          The whole CE thesis: senior brand work done with AI is 20–60% cheaper
+          than a senior in-house hire or a traditional agency retainer. Track
+          anything that updates, threatens, or validates that math.
+        keywords:
+          - cfo scenario
+          - agency retainer cost
+          - senior hire loaded cost
+          - 20–60% cheaper
+          - hard cap
+          - scope creep
+          - make · run
+          - two line items
+          - european salary data
+          - clutch pricing
+
+      - id: P2
+        name: Installed engines & amplifier products
+        why: >
+          CE's Run side — products the client owns and operates (Signal Room,
+          Copy Engine, Brand Asset Generator, Outreach Engine). Track competing
+          tools and buyer language around always-on brand listening and team
+          leverage.
+        keywords:
+          - installed engines
+          - amplifier
+          - team leverage
+          - ship like seniors
+          - copy engine
+          - brand asset generator
+          - signal room
+          - outreach engine
+          - client-owned
+          - train the team
+
+      - id: P3
+        name: Senior AI-native execution
+        why: >
+          The "weeks not months" promise. Senior brand thinking (positioning
+          sprints, message architecture, critic loops) executed at AI speed,
+          without agency overhead. Assaf-as-operator is the proof.
+        keywords:
+          - senior brand thinking
+          - ai execution speed
+          - assaf
+          - critic loop
+          - positioning sprint
+          - message architecture
+          - no agency overhead
+          - ai-native
+          - weeks not months
+
+      - id: P4
+        name: EU AI Act compliance as trust differentiator
+        why: >
+          CE publishes Article 3 / Article 50 deployer compliance and an AI
+          literacy statement as part of the contract. Most competitors don't.
+          Track regulatory discourse and competitor compliance claims.
+        keywords:
+          - eu ai act
+          - deployer
+          - article 3
+          - article 50
+          - transparency
+          - gdpr
+          - ai literacy
+          - compliance statement
+          - sla
+          - msa
+          - credit triggers
+
+      - id: P5
+        name: Proof of work — case studies & showcases
+        why: >
+          Olevia (B2B precision-fermentation dairy fat ingredient) is the
+          flagship case. Track adjacent categories where CE could pitch a
+          similar molecular-positioning play.
+        keywords:
+          - olevia
+          - brand book
+          - molecular positioning
+          - b2b ingredient
+          - category map
+          - competitor brief
+          - brand audit
+          - positioning from science
+          - showcase
+          - proof of work
+
+    discovery_queries:
+      - id: agency-vs-inhouse-europe
+        priority: 1
+        topic: agency retainer vs in-house brand team cost Europe 2025 2026
+        why: >
+          Core displacement argument in CE pricing — monitor for new data
+          that updates or challenges the CFO comparison tables.
+
+      - id: ai-brand-studio-category
+        priority: 1
+        topic: AI-native brand studio OR AI brand agency Europe
+        why: >
+          CE is trying to own this category label — track who else is
+          claiming it and how the term is evolving.
+
+      - id: fractional-cmo-europe
+        priority: 1
+        topic: fractional CMO Europe pricing 2025 2026 OR fractional brand director
+        why: >
+          Direct adjacent competitor set named in CE pricing; monitor for
+          rate changes and positioning shifts.
+
+      - id: eu-ai-act-marketing-compliance
+        priority: 2
+        topic: EU AI Act compliance marketing agency deployer Article 3 2025 2026
+        why: >
+          CE publishes EU AI Act compliance as a trust differentiator —
+          monitor regulatory discourse and competitor compliance claims.
+
+      - id: make-run-model-brand
+        priority: 2
+        topic: brand strategy execution model one-time setup monthly retainer cap
+        why: >
+          Track whether the Make·Run two-line-item model is being adopted
+          or imitated by competitors.
+
+      - id: signal-room-market-intelligence
+        priority: 2
+        topic: brand market intelligence weekly report Reddit X LinkedIn monitoring tool
+        why: >
+          Signal Room is CE's flagship Run product — track competing tools
+          and buyer language around always-on brand listening.
+
+      - id: clutch-agency-pricing-europe
+        priority: 3
+        topic: Clutch branding agency pricing Europe 2025 2026 average retainer
+        why: >
+          CE's cost comparison is anchored to Clutch data — track updates
+          to maintain accuracy of the CFO scenario tables.
+
+      - id: plant-based-fat-b2b-ingredient
+        priority: 3
+        topic: precision fermentation dairy fat ingredient B2B brand positioning 2025 2026
+        why: >
+          Olevia is CE's showcase case study — monitor category discourse
+          to surface future similar client archetypes.
+
+    seed_sources:
+      - url: https://clutch.co/agencies/branding
+        name: clutch.co
+        category: pricing_benchmark
+        why: CE pricing is anchored to Clutch retainer data — primary source for displacement claims.
+      - url: https://www.salaryexpert.com
+        name: salaryexpert.com
+        category: pricing_benchmark
+        why: European senior-brand-hire loaded-cost data for the CFO scenario.
+      - url: https://www.deel.com/employer-of-record/germany
+        name: deel.com
+        category: pricing_benchmark
+        why: Employer-of-record cost overhead for European in-house comparison.
+      - url: https://yunojuno.com/freelancer-rates
+        name: yunojuno.com
+        category: pricing_benchmark
+        why: Freelance day rates for the adjacent fractional comparison.
+      - url: https://o-cmo.com
+        name: o-cmo.com
+        category: competitor
+        why: Direct fractional-CMO competitor — track positioning and pricing changes.
+      - url: https://anthropic.com
+        name: anthropic.com
+        category: ai_infrastructure
+        why: Models that power CE's installed engines — track capability and pricing shifts.
+      - url: https://deepmind.google/technologies/gemini
+        name: deepmind.google
+        category: ai_infrastructure
+        why: Alternative model provider — same reason as Anthropic.
+
+forbidden_phrases:
+  # Never use in drafted action_text — these are AI-slop / agency-mouthpiece tells.
+  - leverage
+  - synergize
+  - ideate
+  - circle back
+  - touch base
+  - deep dive
+  - unlock
+  - transform
+  - empower
+  - level up
+  - move the needle
+  - mission-critical
+  - best-in-class
+  - cutting-edge
+
+anti_patterns:
+  - "Three-item lists in body copy (use two or one)."
+  - "'We believe...' preambles."
+  - "Manifesto ALL CAPS or VC-tweet two-beat pairs."
+  - "Adjective stacks (transformative, innovative, scalable)."

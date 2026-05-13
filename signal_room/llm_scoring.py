@@ -23,32 +23,51 @@ from typing import Any, Dict, Iterable, List, Optional
 import requests
 
 from .models import RawItem, ScoredItem
+from .tracer import tracer
 
 
 def _get_api_key() -> str:
     if k := os.environ.get("ANTHROPIC_API_KEY"):
         return k
-    # Try the last30days env file (saved 2026-05-10)
-    env_path = Path("/root/.config/last30days/.env")
-    if env_path.exists():
-        for line in env_path.read_text(encoding="utf-8").splitlines():
-            if line.startswith("ANTHROPIC_API_KEY="):
-                return line.split("=", 1)[1].strip().strip('"').strip("'")
+    home = Path(os.path.expanduser("~"))
+    # last30days env file — cross-platform: $HOME/.config first, then /root for server runs.
+    env_candidates = [
+        home / ".config" / "last30days" / ".env",
+        Path("/root/.config/last30days/.env"),
+        home / ".config" / "anthropic" / ".env",
+        home / ".anthropic.env",
+    ]
+    for env_path in env_candidates:
+        if env_path.exists():
+            for line in env_path.read_text(encoding="utf-8").splitlines():
+                if line.startswith("ANTHROPIC_API_KEY="):
+                    return line.split("=", 1)[1].strip().strip('"').strip("'")
     # Fallback: brand-audit secrets
-    secrets_path = Path("/root/ce-research/secrets/secrets.env")
-    if secrets_path.exists():
-        for line in secrets_path.read_text(encoding="utf-8").splitlines():
-            if line.startswith("ANTHROPIC_API_KEY="):
-                return line.split("=", 1)[1].strip().strip('"').strip("'")
+    secrets_candidates = [
+        home / "ce-research" / "secrets" / "secrets.env",
+        Path("/root/ce-research/secrets/secrets.env"),
+    ]
+    for secrets_path in secrets_candidates:
+        if secrets_path.exists():
+            for line in secrets_path.read_text(encoding="utf-8").splitlines():
+                if line.startswith("ANTHROPIC_API_KEY="):
+                    return line.split("=", 1)[1].strip().strip('"').strip("'")
     # Last resort: OAuth token from Claude desktop (often expires)
-    auth_path = Path("/root/.openclaw/agents/main/agent/auth-profiles.json")
-    if auth_path.exists():
-        try:
-            d = json.loads(auth_path.read_text(encoding="utf-8"))
-            return d["profiles"]["anthropic:default"]["token"]
-        except Exception:
-            pass
-    raise RuntimeError("ANTHROPIC_API_KEY not set anywhere")
+    auth_candidates = [
+        home / ".openclaw" / "agents" / "main" / "agent" / "auth-profiles.json",
+        Path("/root/.openclaw/agents/main/agent/auth-profiles.json"),
+    ]
+    for auth_path in auth_candidates:
+        if auth_path.exists():
+            try:
+                d = json.loads(auth_path.read_text(encoding="utf-8"))
+                return d["profiles"]["anthropic:default"]["token"]
+            except Exception:
+                pass
+    raise RuntimeError(
+        "ANTHROPIC_API_KEY not found. Set it in env, or add a line "
+        "'ANTHROPIC_API_KEY=sk-ant-...' to ~/.config/last30days/.env"
+    )
 
 
 def _build_system_prompt(brief_text: str) -> str:
@@ -234,6 +253,14 @@ def score_items_with_brief(
     items_list = list(raw_items)
     print(f"[llm-scoring] {len(items_list)} items × {model}  (brief: {brief_path})", flush=True)
 
+    tracer.record("llm_scoring_started", {
+        "brief_path": str(brief_path),
+        "model": model,
+        "item_count": len(items_list),
+        "system_prompt_chars": len(system_prompt),
+        "system_prompt_excerpt_first_800": system_prompt[:800],
+    })
+
     scored: List[ScoredItem] = []
     for i, item in enumerate(items_list, 1):
         user = (
@@ -249,8 +276,11 @@ def score_items_with_brief(
 
         if i > 1:
             time.sleep(2)  # gentle pacing between calls
+        claude_response_raw = None
+        error_msg = None
         try:
             d = _ask_claude(system_prompt, user, api_key, model)
+            claude_response_raw = d
             score = float(max(0, min(100, int(d.get("score") or 0))))
             pillar = d.get("pillar")
             pillar_fit = [pillar] if pillar in {"P1", "P2", "P3", "P4", "P5"} else []
@@ -267,6 +297,7 @@ def score_items_with_brief(
             follow_up = d.get("follow_up_query") or ""
         except Exception as e:
             print(f"  [{i}] ERROR: {e}", flush=True)
+            error_msg = str(e)
             score = 0.0
             pillar_fit, fit = [], "off-territory"
             tldr = ""
@@ -281,6 +312,38 @@ def score_items_with_brief(
             follow_up = ""
 
         print(f"  [{i}/{len(items_list)}] {int(score):3d} {fit:13s} {pillar_fit or '[—]'} · {item.title[:60]}", flush=True)
+
+        tracer.record("llm_score", {
+            "index": i,
+            "total": len(items_list),
+            "item": {
+                "id": item.id,
+                "title": item.title,
+                "source": item.source,
+                "source_url": item.source_url,
+                "date": item.date,
+                "summary": item.summary,
+                "content_excerpt_first_500": (item.content or "")[:500],
+                "tags": item.tags or [],
+                "discovery_method": item.discovery_method,
+            },
+            "user_message": user,
+            "claude_response_raw": claude_response_raw,
+            "error": error_msg,
+            "parsed": {
+                "score": score,
+                "fit": fit,
+                "pillar_fit": pillar_fit,
+                "tldr": tldr,
+                "action_type": action_type,
+                "priority": priority,
+                "effort_minutes": effort_min,
+                "action_text": action_text,
+                "why_score": why_score,
+                "why_care": why_care,
+                "follow_up_query": follow_up,
+            },
+        })
 
         scored.append(
             ScoredItem(
@@ -313,4 +376,14 @@ def score_items_with_brief(
             )
         )
 
-    return sorted(scored, key=lambda s: s.score, reverse=True)
+    sorted_items = sorted(scored, key=lambda s: s.score, reverse=True)
+    tracer.record("llm_scoring_complete", {
+        "scored_count": len(sorted_items),
+        "score_distribution": {
+            "80-100": sum(1 for s in sorted_items if s.score >= 80),
+            "60-79": sum(1 for s in sorted_items if 60 <= s.score < 80),
+            "40-59": sum(1 for s in sorted_items if 40 <= s.score < 60),
+            "0-39": sum(1 for s in sorted_items if s.score < 40),
+        },
+    })
+    return sorted_items
