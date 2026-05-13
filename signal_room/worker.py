@@ -61,7 +61,113 @@ def run_forever(poll_seconds: int = 5) -> None:
         if run:
             process_run(store, run, mock=mock)
             continue
+        brand_run = store.next_queued_brand_run()
+        if brand_run:
+            try:
+                process_brand_refetch(store, brand_run, mock=mock)
+            except Exception as exc:
+                # Already marked failed inside; just log and continue polling.
+                print(f"[worker] brand refetch {brand_run.get('id')} crashed: {exc}", flush=True)
+            continue
         time.sleep(poll_seconds)
+
+
+def process_brand_refetch(store: SignalRoomStore, run: dict[str, Any], mock: bool = False) -> None:
+    """Full pipeline run for one brand: plan → fetch both → score → digest → trace.
+
+    Persists all artifacts (trace.jsonl, trace.html, digest html, plans JSON,
+    summary counts) back into the brand_runs row so the web layer can render
+    `/{brand}` without touching the filesystem.
+    """
+    import json as _json
+    from datetime import date as _date
+    from pathlib import Path as _Path
+
+    run_id = str(run["id"])
+    brand = str(run["brand"])
+    store.mark_brand_run_started(run_id)
+    try:
+        from . import planner as _planner
+        from .pipeline import run_pipeline as _run_pipeline, OUTPUT_DIR as _OUTPUT_DIR
+        from .tracer import tracer as _tracer
+        import yaml as _yaml
+
+        brand_dir = _Path("config") / "brands" / brand
+        brief_path = brand_dir / "brief.yaml"
+        if not brief_path.exists():
+            raise FileNotFoundError(f"No brief at {brief_path} — author one and redeploy.")
+
+        # Generate plans per discovery query, write into the brand's plans/ dir
+        # so pipeline auto-attaches plan_path. Also stash in-memory for DB store.
+        brief = _yaml.safe_load(brief_path.read_text(encoding="utf-8")) or {}
+        queries = (((brief.get("projection") or {}).get("signal_room") or {}).get("discovery_queries") or [])
+        plans_by_qid: dict[str, Any] = {}
+        plans_dir = brand_dir / "plans"
+        plans_dir.mkdir(parents=True, exist_ok=True)
+        for q in queries:
+            if not isinstance(q, dict) or not q.get("id"):
+                continue
+            if mock:
+                # Skip Claude calls in mock mode; vendor planner fallback runs.
+                continue
+            try:
+                plan = _planner.plan_query(brief_path, q)
+                qid = str(q["id"])
+                (plans_dir / f"{qid}.json").write_text(_json.dumps(plan, indent=2) + "\n", encoding="utf-8")
+                plans_by_qid[qid] = plan
+            except Exception as exc:
+                plans_by_qid.setdefault(str(q.get("id", "?")), {"error": str(exc)})
+
+        # Enable tracer for this run.
+        traces_dir = DATA_DIR / "traces"
+        _tracer.enable(brand=brand, run_dir=traces_dir)
+
+        # Fire the full pipeline (both backends combined). Brand isolation
+        # writes to data/<brand>/*.json and config/brands/<brand>/plans/*.json.
+        summary = _run_pipeline(
+            brief_path=brief_path,
+            brand_config_dir=brand_dir,
+            data_suffix=brand,
+            fetch_backend="both",
+            fetch_mock=mock,
+            fetch_parallelism=4,
+            include_fixtures=False,
+        )
+
+        # Flush tracer to disk and read it back for DB storage.
+        trace_jsonl_path = _tracer.flush()
+        trace_html_path = _tracer.flush_html(jsonl_path=trace_jsonl_path)
+        trace_jsonl = trace_jsonl_path.read_text(encoding="utf-8") if trace_jsonl_path else ""
+        trace_html = trace_html_path.read_text(encoding="utf-8") if trace_html_path else ""
+
+        # Pipeline wrote digest to OUTPUT_DIR / signal-room-digest-<brand>-<date>.html
+        digest_path = _OUTPUT_DIR / f"signal-room-digest-{brand}-{_date.today().isoformat()}.html"
+        digest_html = digest_path.read_text(encoding="utf-8") if digest_path.exists() else ""
+
+        store.store_brand_run_artifacts(
+            run_id,
+            trace_jsonl=trace_jsonl,
+            trace_html=trace_html,
+            digest_html=digest_html,
+            plans_json=plans_by_qid,
+        )
+
+        store.mark_brand_run_done(run_id, {
+            "raw_items": summary.get("raw_items", 0),
+            "scored_items": summary.get("scored_items", 0),
+            "top_items": summary.get("top_items", 0),
+            "digest_path": summary.get("digest_path"),
+            "trace_jsonl_path": str(trace_jsonl_path) if trace_jsonl_path else None,
+            "trace_html_path": str(trace_html_path) if trace_html_path else None,
+            "plans_generated": len(plans_by_qid),
+        })
+
+        # Retention: keep only N most-recent runs per brand.
+        keep = int(os.environ.get("SIGNAL_ROOM_BRAND_RUN_KEEP", "10"))
+        store.prune_brand_runs(brand, keep=keep)
+    except Exception as exc:
+        store.mark_brand_run_failed(run_id, str(exc))
+        raise
 
 
 def _score_fetch_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:

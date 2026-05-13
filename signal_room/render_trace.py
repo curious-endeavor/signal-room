@@ -133,6 +133,23 @@ def _build_state(by_stage, records):
         })
     max_q = max((q["item_count"] for q in queries), default=1) or 1
 
+    # GDELT branch (parallel Stage 2 card when present).
+    gdelt_started = (by_stage.get("gdelt_started") or [{}])[0].get("payload", {})
+    gdelt_done = (by_stage.get("gdelt_complete") or [{}])[0].get("payload", {})
+    pillar_returns = {
+        r["payload"]["pillar"]: r["payload"]
+        for r in by_stage.get("gdelt_pillar_items_returned", [])
+    }
+    gdelt_pillars = []
+    for p in gdelt_started.get("pillars", []) or []:
+        ret = pillar_returns.get(p, {})
+        gdelt_pillars.append({
+            "id": p,
+            "item_count": ret.get("item_count", 0),
+            "samples": ret.get("sample_items", []),
+        })
+    max_gp = max((p["item_count"] for p in gdelt_pillars), default=1) or 1
+
     buckets = {"core": [], "adjacent": [], "tangential": [], "off": []}
     for p in scores:
         score = (p.get("parsed") or {}).get("score", 0) or 0
@@ -154,6 +171,10 @@ def _build_state(by_stage, records):
         "l30_done": l30_done,
         "queries": queries,
         "max_q": max_q,
+        "gdelt_started": gdelt_started,
+        "gdelt_done": gdelt_done,
+        "gdelt_pillars": gdelt_pillars,
+        "max_gp": max_gp,
         "dedup": dedup,
         "scoring_started": scoring_started,
         "scoring_done": scoring_done,
@@ -197,6 +218,19 @@ def _funnel_html(state):
 </a>
 """ for q in queries)
 
+    # GDELT branch
+    gdelt_pillars = state.get("gdelt_pillars") or []
+    max_gp = state.get("max_gp", 1) or 1
+    has_gdelt = bool(state.get("gdelt_started"))
+    gdelt_total = state.get("gdelt_done", {}).get("item_count") or sum(p["item_count"] for p in gdelt_pillars)
+    pillar_rows = "".join(f"""
+<a class="funnel-bar" href="#p-{_h(p['id'])}">
+  <span class="fb-label">{_h(p['id'])}</span>
+  <span class="fb-track"><span class="fb-fill fb-fill-gdelt" style="width: {100 * p['item_count'] / max_gp:.1f}%"></span></span>
+  <span class="fb-count">{_h(p['item_count'])}</span>
+</a>
+""" for p in gdelt_pillars)
+
     bucket_meta = [
         ("core", "CORE", "80–100"),
         ("adjacent", "ADJACENT", "60–79"),
@@ -224,14 +258,24 @@ def _funnel_html(state):
 
   <div class="arrow">↓</div>
 
-  <div class="stage-card">
+  <div class="stage-card stage-2 {'has-gdelt' if has_gdelt else ''}">
     <div class="stage-num">2</div>
     <div class="stage-body">
       <div class="stage-title-row">
-        <div class="stage-title">Queries fired</div>
-        <div class="big-number">{_h(len(queries))}</div>
+        <div class="stage-title">Fetched</div>
       </div>
-      <div class="bars">{query_rows}</div>
+      <div class="stage-2-grid">
+        <div class="stage-2-col">
+          <div class="stage-2-sub mono">/last30days · social</div>
+          <div class="stage-2-num">{_h(len(queries))} queries · {_h(sum(q["item_count"] for q in queries))} items</div>
+          <div class="bars">{query_rows}</div>
+        </div>
+        {f'''<div class="stage-2-col stage-2-col-gdelt">
+          <div class="stage-2-sub mono">GDELT · press</div>
+          <div class="stage-2-num">{_h(len(gdelt_pillars))} pillars · {_h(gdelt_total)} items</div>
+          <div class="bars">{pillar_rows}</div>
+        </div>''' if has_gdelt else ''}
+      </div>
     </div>
   </div>
 
@@ -603,6 +647,17 @@ a:hover { color: var(--ce-red); }
 .fb-fill-adjacent { background: var(--ce-grey); }
 .fb-fill-tangential { background: var(--ce-light); }
 .fb-fill-off { background: var(--ce-border); }
+.fb-fill-gdelt { background: #0e7490; }
+
+/* Stage 2 parallel columns (last30days + GDELT) */
+.stage-2-grid { display: grid; grid-template-columns: 1fr; gap: var(--s-4); margin-top: var(--s-2); }
+.stage-2.has-gdelt .stage-2-grid { grid-template-columns: 1fr 1fr; }
+@media (max-width: 880px) { .stage-2.has-gdelt .stage-2-grid { grid-template-columns: 1fr; } }
+.stage-2-col { min-width: 0; }
+.stage-2-col-gdelt { padding-left: var(--s-4); border-left: 1px dashed var(--ce-border); }
+@media (max-width: 880px) { .stage-2-col-gdelt { padding-left: 0; border-left: none; border-top: 1px dashed var(--ce-border); padding-top: var(--s-3); } }
+.stage-2-sub { color: var(--ce-grey); font-size: 11px; text-transform: uppercase; letter-spacing: 0.10em; margin-bottom: 4px; }
+.stage-2-num { font-family: var(--mono); font-size: 12px; color: var(--ce-red); margin-bottom: var(--s-2); }
 .bucket-core .fb-count { color: var(--ce-red); }
 .bucket-adjacent .fb-count { color: var(--ce-grey); }
 .bucket-tangential .fb-count, .bucket-off .fb-count { color: var(--ce-light); }

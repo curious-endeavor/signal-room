@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}{{ brand }} · Signal Room{% endblock %}
+{% block content %}
+
+{% set status = run.status if run and run.status else '' %}
+{% set is_terminal = status in ('done', 'failed') %}
+
+{% if not is_terminal and run %}
+  <meta http-equiv="refresh" content="5">
+{% endif %}
+
+<section class="brand-header">
+  <div class="brand-header-top">
+    <div>
+      <p class="section-label">brand</p>
+      <h1 class="brand-name">{{ brand }}</h1>
+    </div>
+    <form method="post" action="/{{ brand }}/refetch">
+      <button type="submit" class="primary-action">Refetch</button>
+    </form>
+  </div>
+
+  {% if not has_run %}
+    <p class="empty-state">No runs yet for <span class="mono">{{ brand }}</span>. Click <strong>Refetch</strong> to fire the first one — expect ~3-5 minutes.</p>
+  {% else %}
+    <div class="run-summary">
+      <span class="status status-{{ status }}">{{ status }}</span>
+      <span class="run-meta">created {{ run.created_at }}</span>
+      {% if status == 'done' %}
+        <span class="run-meta">·</span>
+        <span class="run-meta">{{ run.summary_json.raw_items or 0 }} raw items</span>
+        <span class="run-meta">·</span>
+        <span class="run-meta">{{ run.summary_json.top_items or 0 }} in digest</span>
+        <span class="run-meta">·</span>
+        <span class="run-meta">{{ run.summary_json.plans_generated or 0 }} plans</span>
+      {% elif status == 'running' %}
+        <span class="run-meta">·</span>
+        <span class="run-meta">started {{ run.started_at }}</span>
+      {% elif status == 'failed' %}
+        <span class="run-meta">·</span>
+        <span class="run-meta error-text">{{ run.error }}</span>
+      {% endif %}
+    </div>
+    <div class="run-links">
+      {% if status == 'done' %}
+        <a href="/{{ brand }}/runs/{{ run.id }}/trace" target="_blank" rel="noreferrer" class="text-link">View trace →</a>
+        <a href="/{{ brand }}/runs/{{ run.id }}/digest" target="_blank" rel="noreferrer" class="text-link">View digest →</a>
+        <a href="/{{ brand }}/runs/{{ run.id }}/trace.jsonl" target="_blank" rel="noreferrer" class="text-link">trace.jsonl</a>
+      {% endif %}
+    </div>
+  {% endif %}
+</section>
+
+{% if has_run and status == 'done' and run.digest_html %}
+  <section class="digest-embed">
+    <p class="section-label">latest digest</p>
+    <iframe srcdoc="{{ run.digest_html | escape }}" class="digest-iframe" title="digest"></iframe>
+  </section>
+{% endif %}
+
+{% endblock %}

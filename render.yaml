@@ -35,6 +35,12 @@ services:
         sync: false
       - key: OPENAI_API_KEY
         sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: SIGNAL_ROOM_BRANDS
+        value: "alice,ce"
+      - key: SIGNAL_ROOM_BRAND_RUN_KEEP
+        value: "10"
 
   - type: worker
     name: ce-signal-room-worker
@@ -73,6 +79,12 @@ services:
         sync: false
       - key: OPENAI_API_KEY
         sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: SIGNAL_ROOM_BRANDS
+        value: "alice,ce"
+      - key: SIGNAL_ROOM_BRAND_RUN_KEEP
+        value: "10"
 
 databases:
   - name: ce-signal-room-db

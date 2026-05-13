@@ -103,6 +103,16 @@ def run_pipeline(
             if brand_config_dir:
                 brand_queries_payload = read_json(Path(brand_config_dir) / "discovery_queries.json", {})
                 brand_queries = brand_queries_payload.get("queries") or None
+                # When a per-brand plans dir is present, auto-attach plan_path so
+                # the vendor gets `--plan <path>` and skips its internal grok planner.
+                if brand_queries:
+                    brand_plans_dir = Path(brand_config_dir) / "plans"
+                    if brand_plans_dir.exists():
+                        for q in brand_queries:
+                            qid = str(q.get("id", ""))
+                            candidate = brand_plans_dir / f"{qid}.json"
+                            if qid and candidate.exists():
+                                q["plan_path"] = str(candidate)
             # Brand-scoped runs dir for vendor /last30days subprocess outputs.
             from .storage import LAST30DAYS_RUNS_DIR as _RUNS_DIR
             from datetime import date as _date

@@ -161,6 +161,93 @@ class SignalRoomStore:
         rows = self.fetchall("select action, count(*) as count from feedback_events group by action", ())
         return {str(row["action"]): int(row["count"]) for row in rows}
 
+    # ----- brand_runs (per-brand pipeline runs surfaced to web) -----
+
+    def create_brand_run(self, brand: str) -> str:
+        run_id = uuid.uuid4().hex[:12]
+        now = _now()
+        self.execute(
+            """
+            insert into brand_runs (id, brand, status, created_at, started_at, finished_at, error, summary_json, trace_jsonl, trace_html, digest_html, plans_json)
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (run_id, brand, "queued", now, "", "", "", "{}", "", "", "", "{}"),
+        )
+        return run_id
+
+    def get_brand_run(self, run_id: str) -> dict[str, Any]:
+        rows = self.fetchall("select * from brand_runs where id = ?", (run_id,))
+        return _decode_brand_run(rows[0]) if rows else {}
+
+    def latest_brand_run(self, brand: str) -> dict[str, Any]:
+        rows = self.fetchall(
+            "select * from brand_runs where brand = ? order by created_at desc limit 1",
+            (brand,),
+        )
+        return _decode_brand_run(rows[0]) if rows else {}
+
+    def list_brand_runs(self, brand: str, limit: int = 10) -> list[dict[str, Any]]:
+        rows = self.fetchall(
+            "select id, brand, status, created_at, started_at, finished_at, error, summary_json from brand_runs where brand = ? order by created_at desc limit ?",
+            (brand, limit),
+        )
+        return [_decode_brand_run(row) for row in rows]
+
+    def next_queued_brand_run(self) -> dict[str, Any]:
+        rows = self.fetchall(
+            "select * from brand_runs where status = ? order by created_at asc limit 1",
+            ("queued",),
+        )
+        return _decode_brand_run(rows[0]) if rows else {}
+
+    def mark_brand_run_started(self, run_id: str) -> None:
+        self.execute(
+            "update brand_runs set status = ?, started_at = ? where id = ?",
+            ("running", _now(), run_id),
+        )
+
+    def mark_brand_run_done(self, run_id: str, summary: dict[str, Any]) -> None:
+        self.execute(
+            "update brand_runs set status = ?, finished_at = ?, summary_json = ? where id = ?",
+            ("done", _now(), json.dumps(summary), run_id),
+        )
+
+    def mark_brand_run_failed(self, run_id: str, error: str) -> None:
+        self.execute(
+            "update brand_runs set status = ?, finished_at = ?, error = ? where id = ?",
+            ("failed", _now(), error, run_id),
+        )
+
+    def store_brand_run_artifacts(
+        self,
+        run_id: str,
+        *,
+        trace_jsonl: str = "",
+        trace_html: str = "",
+        digest_html: str = "",
+        plans_json: dict[str, Any] | None = None,
+    ) -> None:
+        self.execute(
+            "update brand_runs set trace_jsonl = ?, trace_html = ?, digest_html = ?, plans_json = ? where id = ?",
+            (trace_jsonl, trace_html, digest_html, json.dumps(plans_json or {}), run_id),
+        )
+
+    def prune_brand_runs(self, brand: str, keep: int = 10) -> int:
+        """Delete brand_runs older than the most-recent `keep` rows for this brand.
+
+        Returns the number of rows pruned.
+        """
+        rows = self.fetchall(
+            "select id from brand_runs where brand = ? order by created_at desc",
+            (brand,),
+        )
+        to_delete = [r["id"] for r in rows[keep:]]
+        for row_id in to_delete:
+            self.execute("delete from brand_runs where id = ?", (row_id,))
+        return len(to_delete)
+
+    # ----- generic exec -----
+
     def execute(self, sql: str, params: tuple[Any, ...] = ()) -> None:
         with self.transaction() as conn:
             self._execute_conn(conn, sql, params)
@@ -217,6 +304,25 @@ class SignalRoomStore:
 
 def _schema_sql(id_type: str) -> list[str]:
     return [
+        """
+        create table if not exists brand_runs (
+          id text primary key,
+          brand text not null,
+          status text not null,
+          created_at text not null,
+          started_at text not null default '',
+          finished_at text not null default '',
+          error text not null default '',
+          summary_json text not null default '{}',
+          trace_jsonl text not null default '',
+          trace_html text not null default '',
+          digest_html text not null default '',
+          plans_json text not null default '{}'
+        )
+        """,
+        """
+        create index if not exists brand_runs_brand_created_idx on brand_runs (brand, created_at desc)
+        """,
         """
         create table if not exists runs (
           id text primary key,
@@ -284,6 +390,22 @@ def _translate_sql(sql: str, is_postgres: bool) -> str:
         else:
             out.append(char)
     return "".join(out)
+
+
+def _decode_brand_run(row: dict[str, Any]) -> dict[str, Any]:
+    if not row:
+        return {}
+    out = dict(row)
+    for col in ("summary_json", "plans_json"):
+        raw = out.get(col)
+        if raw is None or raw == "":
+            out[col] = {}
+        elif isinstance(raw, str):
+            try:
+                out[col] = json.loads(raw)
+            except json.JSONDecodeError:
+                out[col] = {}
+    return out
 
 
 def _decode_run(row: dict[str, Any]) -> dict[str, Any]:

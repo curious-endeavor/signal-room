@@ -192,6 +192,19 @@ def fetch_gdelt(
             continue
         runs.append(run)
         all_items.extend(run["items"])
+        tracer.record("gdelt_pillar_items_returned", {
+            "pillar": run["pillar"],
+            "item_count": len(run["items"]),
+            "sample_items": [
+                {
+                    "title": (it.get("title") or "")[:160],
+                    "source": it.get("source") or "gdelt",
+                    "source_url": it.get("source_url") or it.get("url") or "",
+                    "date": it.get("date") or "",
+                }
+                for it in (run["items"] or [])[:25]
+            ],
+        })
 
     payload: Dict[str, Any] = {
         "generated_at": datetime.now(timezone.utc).isoformat(),

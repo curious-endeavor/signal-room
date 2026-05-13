@@ -9,8 +9,8 @@ from html import escape
 from typing import Any
 from urllib.parse import urlparse
 
-from fastapi import BackgroundTasks, FastAPI, Form, Request
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -173,6 +173,102 @@ def api_feedback(run_id: str = Form(...), item_id: str = Form(...)) -> JSONRespo
 def api_create_content(run_id: str = Form(...), item_id: str = Form(...)) -> JSONResponse:
     store.record_feedback(run_id, item_id, "create_content")
     return JSONResponse({"ok": True})
+
+
+# ============================================================================
+# Brand-routed surfaces (Alice + CE), each with a latest-run page and refetch.
+# ============================================================================
+
+def _allowed_brand(brand: str) -> Path:
+    """Validate brand is configured. Returns the brand's config dir."""
+    brand_dir = ROOT / "config" / "brands" / brand
+    brief = brand_dir / "brief.yaml"
+    if not brief.exists():
+        raise HTTPException(status_code=404, detail=f"Unknown brand: {brand}")
+    return brand_dir
+
+
+@app.get("/{brand}")
+def brand_latest(request: Request, brand: str) -> Any:
+    _allowed_brand(brand)
+    run = store.latest_brand_run(brand)
+    return templates.TemplateResponse(
+        request,
+        "latest_run.html",
+        {
+            "brand": brand,
+            "run": run,
+            "has_run": bool(run),
+        },
+    )
+
+
+@app.post("/{brand}/refetch")
+def brand_refetch(brand: str, background_tasks: BackgroundTasks) -> RedirectResponse:
+    _allowed_brand(brand)
+    run_id = store.create_brand_run(brand)
+    # In environments without a separate worker process (e.g. local dev), run
+    # inline as a background task. On Render the worker service picks it up
+    # from the queue regardless.
+    if _inline_jobs_enabled():
+        from .worker import process_brand_refetch
+        background_tasks.add_task(process_brand_refetch, store, store.get_brand_run(run_id), _mock_fetch_enabled())
+    return RedirectResponse(url=f"/{brand}/runs/{run_id}", status_code=303)
+
+
+@app.get("/{brand}/runs/{run_id}")
+def brand_run_detail(request: Request, brand: str, run_id: str) -> Any:
+    _allowed_brand(brand)
+    run = store.get_brand_run(run_id)
+    if not run or run.get("brand") != brand:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return templates.TemplateResponse(
+        request,
+        "latest_run.html",
+        {
+            "brand": brand,
+            "run": run,
+            "has_run": True,
+        },
+    )
+
+
+@app.get("/{brand}/runs/{run_id}/trace", response_class=HTMLResponse)
+def brand_run_trace(brand: str, run_id: str) -> HTMLResponse:
+    _allowed_brand(brand)
+    run = store.get_brand_run(run_id)
+    if not run or run.get("brand") != brand:
+        raise HTTPException(status_code=404)
+    html = run.get("trace_html") or "<html><body><p>Trace not yet available.</p></body></html>"
+    return HTMLResponse(content=html)
+
+
+@app.get("/{brand}/runs/{run_id}/trace.jsonl", response_class=PlainTextResponse)
+def brand_run_trace_jsonl(brand: str, run_id: str) -> PlainTextResponse:
+    _allowed_brand(brand)
+    run = store.get_brand_run(run_id)
+    if not run or run.get("brand") != brand:
+        raise HTTPException(status_code=404)
+    return PlainTextResponse(content=run.get("trace_jsonl") or "")
+
+
+@app.get("/{brand}/runs/{run_id}/digest", response_class=HTMLResponse)
+def brand_run_digest(brand: str, run_id: str) -> HTMLResponse:
+    _allowed_brand(brand)
+    run = store.get_brand_run(run_id)
+    if not run or run.get("brand") != brand:
+        raise HTTPException(status_code=404)
+    return HTMLResponse(content=run.get("digest_html") or "<html><body><p>No digest.</p></body></html>")
+
+
+@app.get("/api/brands/{brand}/runs/latest")
+def api_brand_latest(brand: str) -> JSONResponse:
+    _allowed_brand(brand)
+    run = store.latest_brand_run(brand)
+    if not run:
+        return JSONResponse({"ok": True, "run": None})
+    slim = {k: v for k, v in run.items() if k not in {"trace_jsonl", "trace_html", "digest_html"}}
+    return JSONResponse({"ok": True, "run": slim})
 
 
 def _demo_items(limit: int = 20) -> list[dict[str, Any]]:
