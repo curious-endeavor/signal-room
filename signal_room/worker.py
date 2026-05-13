@@ -87,15 +87,51 @@ def process_brand_refetch(store: SignalRoomStore, run: dict[str, Any], mock: boo
     brand = str(run["brand"])
     store.mark_brand_run_started(run_id)
     try:
+        import tempfile as _tempfile
         from . import planner as _planner
         from .pipeline import run_pipeline as _run_pipeline, OUTPUT_DIR as _OUTPUT_DIR
         from .tracer import tracer as _tracer
         import yaml as _yaml
 
-        brand_dir = _Path("config") / "brands" / brand
-        brief_path = brand_dir / "brief.yaml"
-        if not brief_path.exists():
-            raise FileNotFoundError(f"No brief at {brief_path} — author one and redeploy.")
+        # Resolve brief: DB is authoritative (Render filesystem is ephemeral
+        # and runtime-onboarded brands only live in Postgres). Fall back to
+        # the repo's filesystem brief.yaml for legacy/local-dev brands.
+        brand_row = store.get_brand(brand)
+        brief_dict_from_db = (brand_row or {}).get("brief_json") or {}
+        repo_brand_dir = _Path("config") / "brands" / brand
+        repo_brief_path = repo_brand_dir / "brief.yaml"
+
+        if brief_dict_from_db and brief_dict_from_db.get("pillars"):
+            # Materialize a temp brief.yaml (LLM scorer + projector read from disk).
+            # Wrap in the projection envelope the projector expects.
+            wrapped = brief_dict_from_db if "projection" in brief_dict_from_db else {
+                "brand": {
+                    "name": brief_dict_from_db.get("name", brand),
+                    "slug": brand,
+                    "url": brief_dict_from_db.get("url", ""),
+                    "one_liner": brief_dict_from_db.get("one_liner", ""),
+                    "audience": brief_dict_from_db.get("audience", []),
+                },
+                "projection": {
+                    "signal_room": {
+                        "pillars": brief_dict_from_db.get("pillars", []),
+                        "discovery_queries": brief_dict_from_db.get("discovery_queries", []),
+                        "seed_sources": brief_dict_from_db.get("seed_sources", []),
+                    },
+                },
+            }
+            brand_dir = _Path(_tempfile.gettempdir()) / f"sr-brand-{brand}-{run_id}"
+            brand_dir.mkdir(parents=True, exist_ok=True)
+            brief_path = brand_dir / "brief.yaml"
+            brief_path.write_text(_yaml.safe_dump(wrapped, sort_keys=False, allow_unicode=True), encoding="utf-8")
+        elif repo_brief_path.exists():
+            brand_dir = repo_brand_dir
+            brief_path = repo_brief_path
+        else:
+            raise FileNotFoundError(
+                f"No brief in DB or on disk for {brand}. "
+                "Finish onboarding (or paste a brief into the editor) before refetching."
+            )
 
         # Generate plans per discovery query, write into the brand's plans/ dir
         # so pipeline auto-attaches plan_path. Also stash in-memory for DB store.
