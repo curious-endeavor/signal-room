@@ -161,6 +161,40 @@ def fetch_gdelt(
     max_records = max_records or _resolve_default_max()
     run_root = run_root or (GDELT_RUNS_DIR / date.today().isoformat())
 
+    # Graceful degradation: if the gdelt-pp-cli binary isn't on this machine
+    # (e.g. Render build skipped it because no Go toolchain), don't crash the
+    # whole pipeline — return an empty payload with a clear error note.
+    # The caller (pipeline.run_pipeline with fetch_backend="both") will still
+    # have last30days items to work with.
+    if not mock:
+        try:
+            _resolve_binary()
+        except GdeltError as exc:
+            tracer.record("gdelt_unavailable", {"reason": str(exc)})
+            payload: Dict[str, Any] = {
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "backend": "gdelt",
+                "pillar_count": 0,
+                "item_count": 0,
+                "items": [],
+                "errors": [{"pillar": "*", "error": f"binary unavailable: {exc}"}],
+                "runs": [],
+            }
+            if output_path:
+                write_json(output_path, payload)
+            return {
+                "backend": "gdelt",
+                "pillar_count": 0,
+                "item_count": 0,
+                "error_count": 1,
+                "errors": payload["errors"],
+                "run_root": str(run_root),
+                "runs": [],
+                "items": [],
+                "skipped": True,
+                "skip_reason": str(exc),
+            }
+
     pillar_names = list(pillars) if pillars else _list_pillars(mock=mock)
 
     tracer.record("gdelt_started", {
