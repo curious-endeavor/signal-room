@@ -41,6 +41,8 @@ services:
         value: "alice,ce"
       - key: SIGNAL_ROOM_BRAND_RUN_KEEP
         value: "10"
+      - key: SIGNAL_ROOM_PASSCODE_PEPPER
+        sync: false
 
   - type: worker
     name: ce-signal-room-worker
@@ -85,6 +87,8 @@ services:
         value: "alice,ce"
       - key: SIGNAL_ROOM_BRAND_RUN_KEEP
         value: "10"
+      - key: SIGNAL_ROOM_PASSCODE_PEPPER
+        sync: false
 
 databases:
   - name: ce-signal-room-db
