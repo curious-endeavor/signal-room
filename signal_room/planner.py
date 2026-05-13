@@ -49,12 +49,18 @@ def _get_api_key() -> str:
         home / ".config" / "last30days" / ".env",
         home / ".config" / "anthropic" / ".env",
     ]:
-        if env_path.exists():
-            for line in env_path.read_text(encoding="utf-8").splitlines():
-                if line.startswith("ANTHROPIC_API_KEY="):
-                    return line.split("=", 1)[1].strip().strip('"').strip("'")
+        try:
+            if env_path.exists():
+                for line in env_path.read_text(encoding="utf-8").splitlines():
+                    if line.startswith("ANTHROPIC_API_KEY="):
+                        return line.split("=", 1)[1].strip().strip('"').strip("'")
+        except (OSError, PermissionError):
+            # File exists but unreadable (e.g. Render's vendor mount).
+            # Don't crash the planner — try the next fallback / raise below.
+            continue
     raise RuntimeError(
-        "ANTHROPIC_API_KEY not found. Set it in env or in ~/.config/last30days/.env"
+        "ANTHROPIC_API_KEY not found. Set it as an environment variable in the "
+        "service settings (both web and worker on Render) or in ~/.config/last30days/.env"
     )
 
 

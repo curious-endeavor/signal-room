@@ -38,20 +38,26 @@ def _get_api_key() -> str:
         home / ".anthropic.env",
     ]
     for env_path in env_candidates:
-        if env_path.exists():
-            for line in env_path.read_text(encoding="utf-8").splitlines():
-                if line.startswith("ANTHROPIC_API_KEY="):
-                    return line.split("=", 1)[1].strip().strip('"').strip("'")
+        try:
+            if env_path.exists():
+                for line in env_path.read_text(encoding="utf-8").splitlines():
+                    if line.startswith("ANTHROPIC_API_KEY="):
+                        return line.split("=", 1)[1].strip().strip('"').strip("'")
+        except (OSError, PermissionError):
+            continue
     # Fallback: brand-audit secrets
     secrets_candidates = [
         home / "ce-research" / "secrets" / "secrets.env",
         Path("/root/ce-research/secrets/secrets.env"),
     ]
     for secrets_path in secrets_candidates:
-        if secrets_path.exists():
-            for line in secrets_path.read_text(encoding="utf-8").splitlines():
-                if line.startswith("ANTHROPIC_API_KEY="):
-                    return line.split("=", 1)[1].strip().strip('"').strip("'")
+        try:
+            if secrets_path.exists():
+                for line in secrets_path.read_text(encoding="utf-8").splitlines():
+                    if line.startswith("ANTHROPIC_API_KEY="):
+                        return line.split("=", 1)[1].strip().strip('"').strip("'")
+        except (OSError, PermissionError):
+            continue
     # Last resort: OAuth token from Claude desktop (often expires)
     auth_candidates = [
         home / ".openclaw" / "agents" / "main" / "agent" / "auth-profiles.json",
