@@ -91,6 +91,13 @@ def main(argv: Sequence[str] = None) -> int:
     lab_show_parser.add_argument("--top", type=int, default=3)
     lab_show_parser.add_argument("--emit", choices=["text", "json"], default="text")
 
+    plan_parser = subparsers.add_parser("plan", help="Generate Signal-Room QueryPlans for every query in a brief (skips vendor's grok planner)")
+    plan_parser.add_argument("--brief", required=True, type=Path, help="Path to brief.yaml")
+    plan_parser.add_argument("--out", type=Path, default=Path("config/plans"), help="Output dir for plan JSON files (default: config/plans/)")
+    plan_parser.add_argument("--model", default="claude-sonnet-4-6", help="Planner model")
+    plan_parser.add_argument("--only", default="", help="Comma-separated query ids to plan; empty = all")
+    plan_parser.add_argument("--emit", choices=["text", "json"], default="text")
+
     args = parser.parse_args(argv)
     if args.command == "run":
         run_kwargs = {
@@ -226,6 +233,38 @@ def main(argv: Sequence[str] = None) -> int:
                 print(f"Query lab failed: {exc}")
             return 1
 
+    if args.command == "plan":
+        import yaml
+        from .planner import plan_query
+
+        brief = yaml.safe_load(Path(args.brief).read_text(encoding="utf-8")) or {}
+        queries = (((brief.get("projection") or {}).get("signal_room") or {}).get("discovery_queries") or [])
+        only = {s.strip() for s in args.only.split(",") if s.strip()}
+        if only:
+            queries = [q for q in queries if isinstance(q, dict) and q.get("id") in only]
+        if not queries:
+            print(f"No discovery_queries found in {args.brief} (after --only filter)")
+            return 1
+        args.out.mkdir(parents=True, exist_ok=True)
+        results = []
+        for q in queries:
+            qid = q.get("id", "")
+            if not qid:
+                continue
+            try:
+                plan = plan_query(args.brief, q, model=args.model)
+                out_path = args.out / f"{qid}.json"
+                out_path.write_text(json.dumps(plan, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+                results.append({"id": qid, "topic": q.get("topic", ""), "out": str(out_path), "subqueries": len(plan.get("subqueries", [])), "ok": True})
+                print(f"  ✓ {qid}  →  {out_path}  ({len(plan.get('subqueries', []))} subqueries)")
+            except Exception as exc:
+                results.append({"id": qid, "topic": q.get("topic", ""), "ok": False, "error": str(exc)})
+                print(f"  ✗ {qid}: {exc}")
+        payload = {"plans_dir": str(args.out), "results": results, "ok": all(r["ok"] for r in results)}
+        if args.emit == "json":
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0 if payload["ok"] else 1
+
     parser.error("Unknown command")
     return 2
 
@@ -268,6 +307,7 @@ def _dispatch_fetch(backend, mock, query_limit, lookback_days, pillars, timespan
             query_limit=query_limit,
             lookback_days=lookback_days,
             output_path=None,
+            parallelism=4,
         ))
     if backend in {"gdelt", "both"}:
         payloads.append(fetch_gdelt(

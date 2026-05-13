@@ -1,0 +1,440 @@
+# Alice — Signal Room brief
+#
+# Authored 2026-05-13 from real Alice context in ~/Projects/alice-brand-team/
+# (about-alice.md, docs/messaging.md, products/*, projects/2026-q2-*).
+# Replaces the first-pass guesses. Dan to review and edit before live runs.
+
+brand:
+  name: Alice
+  slug: alice
+  url: https://alice.io
+  former_name: ActiveFence
+  one_liner: >
+    Trust, safety, and security for the GenAI era. Built on a decade of
+    real-world adversarial intelligence from protecting 3 billion users
+    across the world's biggest tech platforms. The quiet guardian stepping
+    into the light.
+  tagline: Advance unafraid
+  voice_specimens:
+    - "Experience you can't simulate."
+    - "100% organic. Our data? Never gets old."
+    - "Securing models you haven't even heard of yet."
+    - "Trained on real threats, not simulated ones."
+    - "No AI bullshit. Real-life stories. Real people."
+  audience_primary:
+    - Application Security teams (AppSec)
+    - CISOs and security leaders at enterprises shipping customer-facing AI
+    - Product and AI builders responsible for AI experiences at scale
+  audience_secondary:
+    - General public / press (brand-awareness funnel via PR-led narratives)
+    - Frontier model labs and UGC platforms (top-end peer/customer pool)
+  business_model: >
+    SaaS platform. Core product = WonderSuite (WonderBuild for pre-launch
+    testing, WonderFence for runtime guardrails, WonderCheck for production
+    red-teaming, Vector for per-policy guardrail training). Powered by
+    Rabbit Hole — proprietary decade-old adversarial intelligence engine.
+    Sells to enterprises in regulated verticals + frontier model labs.
+  competitive_positioning: >
+    Counter to "new AI security startup" → Alice has a decade of real data.
+    Counter to "synthetic benchmarks" → 100% organic adversarial samples.
+    Counter to "vendor pitch" → research-first, "the work IS the marketing"
+    (Irregular benchmark). Counter to "fear-monger" → trusted partner who
+    lets you advance unafraid (Wiz tonal benchmark).
+
+  strategic_frame: >
+    Per Tomer Poran (2026-05-06): Alice plays on the RISK side of the
+    risk-vs-capability split. Risk = making sure AI doesn't do what it's
+    not supposed to do. Capability = making sure AI does what it IS
+    supposed to do. Capability players (Scale AI, Surge AI, Turing,
+    Toloka, Prolific, Handshake, Mercor) compete on data volume and
+    breadth — Alice does NOT compete there. Alice's wedge is SPECIALISM
+    in risk, privacy, compliance, bias, deception. "We are not
+    generalists." Drafted action_text should never position Alice as a
+    Scale/Surge/Prolific competitor — those are generalists, Alice is
+    the specialist.
+
+  two_public_brand_proposal: >
+    Per Tomer's website-rehaul proposal (not yet final — conflict with
+    Noam's 3-brand framing pending). Two surfaces:
+      Alice = the product (WonderSuite). Automated AI security for
+        GenAI consumer-facing apps in enterprises. Competes with
+        Palo Alto Networks, Zscaler.
+      Alice Labs = expertise + services. Red teaming, data services,
+        policy & enforcement advisory, RL infrastructure, intelligence.
+        Frontier labs + GenAI-native + T&S customers.
+        Aspirational reference: Irregular.
+  brand_principles_summary: >
+    Research-first, not marketing-first. Human opinion, not AI. Recognizably
+    Alice. POV in everything. No AI slop. No gimmicks. Would Alice's own
+    300 people share it unprompted?
+
+projection:
+  signal_room:
+
+    pillars:
+      - id: P1
+        name: Customer-facing chatbot failures & brand harm
+        why: >
+          The John Oliver lane. Every time a brand chatbot lies, sycophants,
+          or harms a user in public, Alice's pitch ("we test before launch,
+          guard at runtime, re-test in production") gets sharper. Track
+          incidents, the discourse around them, and the legal/regulatory
+          response (AB 1988, consumer lawsuits, FTC actions).
+        keywords:
+          - brand chatbot fail
+          - customer service ai
+          - chatbot scandal
+          - ai hallucination consumer
+          - sycophancy chatbot
+          - ab 1988
+          - chatbot lawsuit
+          - chatbot lied
+          - generative ai consumer harm
+          - support bot failure
+
+      - id: P2
+        name: Frontier model safety & adversarial AI research
+        why: >
+          The peer landscape — Anthropic system cards, OpenAI red-team
+          papers, Irregular (SOLVE framework), DeepMind safety research,
+          MITRE ATLAS updates, abliterated/heretic open-source threats,
+          jailbreak techniques. Alice plays here as a research partner
+          and benchmark-tester, not a model lab. Track what's being
+          tested, what's being broken, and who's publishing.
+        keywords:
+          - red team ai
+          - jailbreak llm
+          - system card anthropic
+          - system card openai
+          - adversarial prompt
+          - prompt injection
+          - abliterated model
+          - heretic model
+          - alignment research
+          - solve framework irregular
+          - mitre atlas
+          - ai safety paper
+
+      - id: P3
+        name: AI security tooling & enterprise security incumbents (Alice product side)
+        why: >
+          The competitor radar for Alice/WonderSuite. Per Tomer Poran:
+          primary product-side competitors are enterprise security
+          incumbents Palo Alto Networks and Zscaler (NOT pure-play AI
+          security startups). Plus adjacent AI-security-native vendors:
+          Lakera, Robust Intelligence, Prompt Security, Protect AI,
+          HiddenLayer, CalypsoAI, Patronus, Guardrails AI, NeMo Guardrails,
+          LLM Guard, Cranium, Repello, Prompt Armor.
+        keywords:
+          - palo alto networks ai
+          - zscaler ai
+          - enterprise ai security
+          - ai security platform
+          - ai security funding
+          - llm guardrails
+          - prompt injection defense
+          - ai red team tool
+          - ai observability
+          - ai application security
+          - llm security startup
+          - model security
+          - lakera
+          - protect ai
+          - robust intelligence
+          - patronus
+          - hiddenlayer
+          - guardrails ai
+          - calypsoai
+          - cranium ai
+          - repello
+          - prompt security
+          - nemo guardrails
+          - llm guard
+
+      - id: P3b
+        name: Data/services generalists (Alice Labs side — counter-positioning)
+        why: >
+          The Alice Labs competitor set per Tomer Poran (2026-05-06):
+          Prolific, Turing, Scale AI, Surge AI, Toloka, Handshake, Mercor.
+          These are generalists Alice Labs counter-positions against on
+          SPECIALISM (risk, privacy, compliance, bias, deception). Track
+          their moves into AI safety/red-team/evaluation territory —
+          when they encroach on Alice Labs lanes, that's signal.
+          Alice does NOT compete on data volume; this pillar exists to
+          MONITOR the generalists, not match them.
+        keywords:
+          - scale ai
+          - surge ai
+          - surge hq
+          - prolific
+          - turing.com post training
+          - toloka
+          - handshake ai
+          - mercor
+          - rlhf vendor
+          - data labeling vendor
+          - human evaluation ai
+          - rl environment ai
+          - post-training data
+          - frontier lab data
+          - benchmark vendor
+
+      - id: P4
+        name: AI regulation & enterprise compliance
+        why: >
+          Compliance is one of Alice's strongest buyer triggers. EU AI Act
+          enforcement timelines, ISO 42001 adoption, NIST AI RMF, MITRE
+          ATLAS revisions, US state laws (AB 1988, NY local law 144, etc.),
+          UK AI Bill, sectoral regulations (HIPAA + AI, financial
+          regulators on AI). Track every signal that puts AI risk on a
+          CISO's desk.
+        keywords:
+          - eu ai act enforcement
+          - ai act deployer
+          - article 50 disclosure
+          - iso 42001
+          - nist ai rmf
+          - ai compliance audit
+          - ai liability law
+          - ab 1988
+          - ai risk management
+          - ai governance enterprise
+          - hipaa ai
+          - financial regulator ai
+          - cisco ai policy
+
+      - id: P5
+        name: Customer-facing AI in regulated verticals
+        why: >
+          Where Alice sells. Healthcare AI assistants, fintech chat agents,
+          retail/e-commerce AI shopping bots, education AI tutors, insurance
+          AI claims agents. Track real deployments, real incidents, real
+          buyer language. These are Vector's use cases — every story here
+          is a potential case-study seed.
+        keywords:
+          - healthcare ai assistant
+          - patient ai chatbot
+          - fintech ai agent
+          - insurance ai claims
+          - retail ai shopping
+          - ai customer support enterprise
+          - ai tutor edtech
+          - regulated industry ai deployment
+          - ai agent enterprise rollout
+          - voice ai customer
+
+    discovery_queries:
+      - id: brand-chatbot-incidents
+        priority: 1
+        topic: brand chatbot fail lawsuit customer harm 2026 OR sycophancy hallucination customer service AI
+        why: >
+          Primary news peg for Alice's John Oliver-style narrative —
+          every brand chatbot incident is a fresh story to ride.
+
+      - id: frontier-model-red-team
+        priority: 1
+        topic: frontier model red team Anthropic OpenAI system card 2026 jailbreak adversarial
+        why: >
+          Peer-research signal. Surfaces new model evaluations and lets
+          Alice position alongside Anthropic/Irregular as a research peer.
+
+      - id: ai-security-funding-launches
+        priority: 1
+        topic: AI security startup funding round product launch 2026 guardrails prompt injection
+        why: >
+          Competitive radar. Track every direct competitor move (Lakera,
+          Robust Intelligence, Protect AI, HiddenLayer, etc.).
+
+      - id: paloalto-zscaler-ai-security
+        priority: 1
+        topic: Palo Alto Networks OR Zscaler AI security GenAI product launch 2026
+        why: >
+          Enterprise-security incumbents that Tomer flagged as Alice's
+          true product-side competitors. When they ship AI features, that's
+          direct competitive signal.
+
+      - id: data-generalists-encroach-safety
+        priority: 2
+        topic: Scale AI OR Surge AI OR Turing OR Prolific OR Toloka safety evaluation red-team 2026
+        why: >
+          Tomer's named generalist competitors moving INTO Alice Labs
+          territory (safety, red-team, eval) is the signal worth catching.
+          Pure data-labeling stories are noise; safety/eval moves are signal.
+
+      - id: eu-ai-act-enforcement
+        priority: 1
+        topic: EU AI Act enforcement 2026 deployer general purpose AI compliance fine
+        why: >
+          Regulatory tailwind. EU AI Act enforcement creates direct buyer
+          urgency. Track timelines, fines, deployer obligations.
+
+      - id: open-source-model-safety
+        priority: 2
+        topic: open source LLM safety abliterated heretic uncensored jailbreak 2026
+        why: >
+          Alice's Heretic campaign rides this lane. Track any new story
+          about OS model misuse, abliterated weights, jailbroken builds.
+
+      - id: ab1988-consumer-ai-state-law
+        priority: 2
+        topic: AB 1988 California AI chatbot disclosure consumer state law 2026
+        why: >
+          US state-level AI consumer protection — direct relevance to
+          customer-facing-AI buyers. Liability angle for the CISO pitch.
+
+      - id: healthcare-ai-incidents
+        priority: 2
+        topic: healthcare AI assistant patient chatbot incident medical advice 2026
+        why: >
+          Vertical news pegs for Vector's healthcare use case.
+
+      - id: fintech-ai-agent-launches
+        priority: 2
+        topic: fintech AI agent banking chatbot customer support compliance 2026
+        why: >
+          Vertical news pegs for Vector's fintech use case.
+
+      - id: anthropic-deepmind-safety-research
+        priority: 3
+        topic: Anthropic interpretability OR DeepMind alignment safety research paper 2026
+        why: >
+          Brand benchmark — Anthropic's research-as-content model is
+          Alice's reference. Surfaces tone and content patterns to learn
+          from.
+
+      - id: ai-agent-security-vulnerabilities
+        priority: 3
+        topic: AI agent security vulnerability tool use indirect prompt injection 2026
+        why: >
+          The agentic-AI security lane — Alice's "AgenticVerse" angle.
+
+    seed_sources:
+      - url: https://www.ft.com
+        name: ft.com
+        category: tier1_press
+        why: Tier-1 PR target — Heretic campaign actively pitching FT.
+
+      - url: https://www.nytimes.com
+        name: nytimes.com
+        category: tier1_press
+        why: Tier-1 PR target — NYT in active pursuit for Heretic.
+
+      - url: https://www.wired.com
+        name: wired.com
+        category: tier1_press
+        why: Tier-1 PR target. Best fit for safety/security narratives.
+
+      - url: https://www.reuters.com
+        name: reuters.com
+        category: tier1_press
+        why: Broad reach, follow-up PR target (NPR/Reuters maybe later).
+
+      - url: https://www.anthropic.com
+        name: anthropic.com
+        category: peer_research
+        why: Brand benchmark — research-as-content; Alice cites/partners with frontier labs.
+
+      - url: https://irregular.io
+        name: irregular.io
+        category: peer_research
+        why: Closest research-peer benchmark — SOLVE framework, the work-IS-marketing model.
+
+      - url: https://www.wiz.io
+        name: wiz.io
+        category: brand_benchmark
+        why: Security-brand tonal benchmark — "security should feel empowering."
+
+      - url: https://www.paloaltonetworks.com
+        name: paloaltonetworks.com
+        category: competitor_product
+        why: Per Tomer — primary product-side competitor to Alice/WonderSuite.
+
+      - url: https://www.zscaler.com
+        name: zscaler.com
+        category: competitor_product
+        why: Per Tomer — primary product-side competitor to Alice/WonderSuite.
+
+      - url: https://scale.com
+        name: scale.com
+        category: competitor_generalist
+        why: Per Tomer — Alice Labs generalist competitor (counter-positioning anchor).
+
+      - url: https://www.surgehq.ai
+        name: surgehq.ai
+        category: competitor_generalist
+        why: Per Tomer — Alice Labs generalist competitor.
+
+      - url: https://www.prolific.com
+        name: prolific.com
+        category: competitor_generalist
+        why: Per Tomer — closest comparable on human evaluation; counter-position on specialism.
+
+      - url: https://www.turing.com
+        name: turing.com
+        category: competitor_generalist
+        why: Per Tomer — moving toward post-training/RL territory; track encroachment into safety.
+
+      - url: https://thehackernews.com
+        name: thehackernews.com
+        category: security_trade
+        why: Security trade publication — where AppSec / CISO readers go.
+
+      - url: https://news.ycombinator.com
+        name: hackernews
+        category: technical_community
+        why: Where AI security tools get evaluated by builders.
+
+      - url: https://www.schneier.com
+        name: schneier.com
+        category: thought_leader
+        why: Bruce Schneier's takes shape security-leader discourse.
+
+      - url: https://huggingface.co/papers
+        name: huggingface.co
+        category: research_community
+        why: Where adversarial / safety papers surface first.
+
+forbidden_phrases:
+  # Never use in drafted action_text. Alice's "no AI slop" rule.
+  - leverage
+  - unlock
+  - transform
+  - ignite
+  - empower
+  - supercharge
+  - level up
+  - move the needle
+  - mission-critical
+  - best-in-class
+  - cutting-edge
+  - paradigm shift
+  - thought leadership
+  - synergize
+  - circle back
+  - touch base
+  - holistic
+  - end-to-end (as adjective stack)
+  - robust
+  - delve
+  - landscape
+  - tapestry
+  - foster
+  - showcase (as verb)
+  - intricate
+  - vibrant
+
+anti_patterns:
+  - "Marketing-first framing. Alice is research-first — content comes from what Alice actually does."
+  - "AI-formed opinions. Every POV must be a real human's actual view."
+  - "Generic content that could come from any AI security startup."
+  - "Gimmicks. (Caterpillar was a learning — not to be repeated.)"
+  - "Fear-mongering tone. Alice is the trusted partner, not the alarmist."
+  - "Manufactured thought leadership. Real findings, real stories, real people."
+  - "VC-tweet two-beat pairs ('X is dead. Y is here.')."
+  - "Adjective stacks ('innovative, scalable, transformative')."
+  - "'We believe...' preambles."
+
+style_anchors:
+  - "Wiz: playful, optimistic, security as empowerment."
+  - "Irregular: minimal, research-led, the work speaks."
+  - "Anthropic: engineers announce in their own names; CEO writes long essays under his own byline."

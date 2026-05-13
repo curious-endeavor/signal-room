@@ -1,0 +1,63 @@
+{
+  "intent": "breaking_news",
+  "freshness_mode": "strict_recent",
+  "cluster_mode": "none",
+  "raw_topic": "brand chatbot fail lawsuit customer harm 2026 OR sycophancy hallucination customer service AI",
+  "subqueries": [
+    {
+      "label": "chatbot-incidents-lawsuits-2026",
+      "search_query": "brand chatbot fail lawsuit customer harm 2026",
+      "ranking_query": "What are the most recent lawsuits, regulatory actions, or public incidents where a company's customer-facing AI chatbot caused harm, lied, hallucinated, or misled a user in 2026?",
+      "sources": [
+        "grounding",
+        "x",
+        "reddit"
+      ],
+      "weight": 0.35
+    },
+    {
+      "label": "sycophancy-hallucination-customer-service",
+      "search_query": "AI chatbot sycophancy hallucination customer service failure 2026",
+      "ranking_query": "Which customer service AI chatbots have been publicly caught hallucinating, giving false information, or behaving sycophantically in ways that harmed or misled real users in 2026?",
+      "sources": [
+        "grounding",
+        "x",
+        "hackernews"
+      ],
+      "weight": 0.25
+    },
+    {
+      "label": "ab1988-consumer-ai-liability-regulation",
+      "search_query": "AB 1988 chatbot disclosure consumer AI liability law 2026",
+      "ranking_query": "What is the latest legislative and regulatory activity around consumer AI chatbot liability, including AB 1988, FTC actions, and state-level AI consumer protection laws in 2026?",
+      "sources": [
+        "grounding",
+        "x",
+        "reddit"
+      ],
+      "weight": 0.25
+    },
+    {
+      "label": "chatbot-scandal-community-discourse",
+      "search_query": "chatbot scandal brand AI customer support embarrassment 2026",
+      "ranking_query": "What are developers, security professionals, and consumers saying on forums and social media about brand chatbot failures, AI customer service scandals, and generative AI consumer harm incidents in 2026?",
+      "sources": [
+        "reddit",
+        "x",
+        "hackernews"
+      ],
+      "weight": 0.15
+    }
+  ],
+  "source_weights": {
+    "grounding": 0.35,
+    "x": 0.25,
+    "reddit": 0.2,
+    "hackernews": 0.15,
+    "youtube": 0.05
+  },
+  "notes": [
+    "Decomposed into four angles — incident/lawsuit news, hallucination/sycophancy product failures, regulatory/liability tailwinds (AB 1988, FTC), and community discourse — because Alice's John Oliver narrative needs both the raw incident signal AND the public outrage layer; grounding and X dominate for press-worthy breaking stories while reddit/hackernews surface the practitioner and consumer sentiment that feeds Alice's research-first POV.",
+    "planner=signal-room (claude-sonnet-4-6)"
+  ]
+}

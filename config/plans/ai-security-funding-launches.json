@@ -1,0 +1,63 @@
+{
+  "intent": "breaking_news",
+  "freshness_mode": "strict_recent",
+  "cluster_mode": "none",
+  "raw_topic": "AI security startup funding round product launch 2026 guardrails prompt injection",
+  "subqueries": [
+    {
+      "label": "funding-rounds-2026",
+      "search_query": "AI security startup funding round 2026 Lakera HiddenLayer Protect AI Robust Intelligence Patronus CalypsoAI",
+      "ranking_query": "Which AI security startups have announced funding rounds, Series A/B, or major investment in 2026, especially those competing with Alice WonderSuite in LLM guardrails and prompt injection defense?",
+      "sources": [
+        "grounding",
+        "x",
+        "reddit"
+      ],
+      "weight": 0.3
+    },
+    {
+      "label": "product-launches-guardrails",
+      "search_query": "LLM guardrails product launch 2026 prompt injection defense Guardrails AI NeMo Guardrails LLM Guard Prompt Security Repello Cranium",
+      "ranking_query": "What new AI security products, guardrail tools, or prompt injection defenses have launched or shipped major updates in 2026 from vendors like Guardrails AI, NeMo Guardrails, Prompt Security, Repello, or Cranium?",
+      "sources": [
+        "grounding",
+        "hackernews",
+        "github"
+      ],
+      "weight": 0.25
+    },
+    {
+      "label": "enterprise-ai-security-incumbents",
+      "search_query": "Palo Alto Networks Zscaler AI security GenAI guardrails product launch 2026 enterprise",
+      "ranking_query": "Have Palo Alto Networks or Zscaler announced new AI security features, GenAI guardrail products, or enterprise LLM security capabilities in 2026 that compete with Alice WonderSuite?",
+      "sources": [
+        "grounding",
+        "x",
+        "reddit"
+      ],
+      "weight": 0.25
+    },
+    {
+      "label": "community-discourse-ai-security-tools",
+      "search_query": "AI application security tool 2026 prompt injection red team LLM runtime guardrails review comparison",
+      "ranking_query": "What are AppSec engineers, CISOs, and AI builders saying about AI security tools, LLM guardrail vendors, and prompt injection defenses in 2026 — which products are getting traction or criticism in practitioner communities?",
+      "sources": [
+        "hackernews",
+        "reddit",
+        "x"
+      ],
+      "weight": 0.2
+    }
+  ],
+  "source_weights": {
+    "grounding": 0.35,
+    "x": 0.25,
+    "hackernews": 0.2,
+    "reddit": 0.15,
+    "github": 0.05
+  },
+  "notes": [
+    "Decomposed into four lenses — pure funding news, product/tool launches (with GitHub/HN for dev-facing signals), incumbent enterprise security moves (Palo Alto/Zscaler as Tomer's named primary competitors), and practitioner community sentiment — to surface both press-worthy competitive moves and ground-level AppSec/CISO discourse that Alice's brief explicitly tracks.",
+    "planner=signal-room (claude-sonnet-4-6)"
+  ]
+}

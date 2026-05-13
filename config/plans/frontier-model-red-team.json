@@ -1,0 +1,65 @@
+{
+  "intent": "breaking_news",
+  "freshness_mode": "strict_recent",
+  "cluster_mode": "none",
+  "raw_topic": "frontier model red team Anthropic OpenAI system card 2026 jailbreak adversarial",
+  "subqueries": [
+    {
+      "label": "system-card-model-eval-news",
+      "search_query": "Anthropic OpenAI system card red team evaluation 2026",
+      "ranking_query": "What new system cards, model evaluations, or red team reports have Anthropic or OpenAI published in 2026, and what safety findings did they surface?",
+      "sources": [
+        "grounding",
+        "x",
+        "reddit"
+      ],
+      "weight": 0.3
+    },
+    {
+      "label": "jailbreak-adversarial-prompt-research",
+      "search_query": "jailbreak LLM adversarial prompt injection frontier model 2026",
+      "ranking_query": "What new jailbreak techniques, adversarial prompt attacks, or prompt injection methods targeting frontier models have been published or demonstrated in 2026?",
+      "sources": [
+        "grounding",
+        "hackernews",
+        "github",
+        "reddit"
+      ],
+      "weight": 0.25
+    },
+    {
+      "label": "ai-safety-red-team-papers",
+      "search_query": "AI safety red teaming alignment research paper 2026 MITRE ATLAS adversarial",
+      "ranking_query": "Which academic or industry research papers on AI red teaming, alignment, or adversarial robustness have been published in 2026, including from DeepMind, Anthropic, or MITRE ATLAS?",
+      "sources": [
+        "grounding",
+        "hackernews",
+        "reddit"
+      ],
+      "weight": 0.25
+    },
+    {
+      "label": "abliterated-heretic-open-source-threats",
+      "search_query": "abliterated model heretic uncensored open source LLM safety bypass 2026",
+      "ranking_query": "What new open-source abliterated, heretic, or uncensored model releases are circulating in 2026 that bypass safety guardrails, and what is the community discourse around them?",
+      "sources": [
+        "github",
+        "reddit",
+        "hackernews",
+        "x"
+      ],
+      "weight": 0.2
+    }
+  ],
+  "source_weights": {
+    "grounding": 0.3,
+    "x": 0.2,
+    "hackernews": 0.2,
+    "reddit": 0.15,
+    "github": 0.15
+  },
+  "notes": [
+    "Decomposed into four distinct lenses: official model-lab publications (system cards), active jailbreak/adversarial technique discovery, academic/industry safety research papers, and open-source threat model discourse — each surfaces different signal for Alice's research-peer positioning alongside Anthropic and Irregular; github and hackernews weighted up because adversarial tooling and abliterated model releases live in developer-community channels, while grounding and x capture the press and researcher discourse layer.",
+    "planner=signal-room (claude-sonnet-4-6)"
+  ]
+}
