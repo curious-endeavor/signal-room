@@ -327,11 +327,12 @@ class FetchGdeltTest(unittest.TestCase):
 
 class CliWiringTest(unittest.TestCase):
     def test_fetch_gdelt_dispatches_to_fetch_gdelt(self):
-        from signal_room import cli
+        from signal_room import cli, discovery_store
 
         with patch.object(cli, "fetch_gdelt", return_value={"item_count": 0, "items": []}) as m:
-            with patch.object(cli, "_emit"):
-                rc = cli.main(["fetch", "--backend", "gdelt", "--pillars", "chatbot-failures", "--timespan", "1d", "--max", "3"])
+            with patch.object(discovery_store, "write_merged_discovered_items", return_value={"item_count": 0, "items": []}):
+                with patch.object(cli, "_emit"):
+                    rc = cli.main(["fetch", "--backend", "gdelt", "--pillars", "chatbot-failures", "--timespan", "1d", "--max", "3"])
         self.assertEqual(rc, 0)
         m.assert_called_once()
         kwargs = m.call_args.kwargs
@@ -339,37 +340,32 @@ class CliWiringTest(unittest.TestCase):
         self.assertEqual(kwargs["timespan"], "1d")
         self.assertEqual(kwargs["max_records"], 3)
         self.assertFalse(kwargs["mock"])
+        self.assertIsNone(kwargs["output_path"])  # routed through discovery_store
 
     def test_fetch_gdelt_default_all_pillars_passes_none(self):
-        from signal_room import cli
+        from signal_room import cli, discovery_store
 
         with patch.object(cli, "fetch_gdelt", return_value={"item_count": 0, "items": []}) as m:
-            with patch.object(cli, "_emit"):
-                cli.main(["fetch", "--backend", "gdelt"])
+            with patch.object(discovery_store, "write_merged_discovered_items", return_value={"item_count": 0, "items": []}):
+                with patch.object(cli, "_emit"):
+                    cli.main(["fetch", "--backend", "gdelt"])
         self.assertIsNone(m.call_args.kwargs["pillars"])
 
     def test_fetch_both_calls_both_and_merges(self):
-        from signal_room import cli
+        from signal_room import cli, discovery_store
 
         with patch.object(cli, "fetch_last30days", return_value={"items": [], "item_count": 0}) as l30:
             with patch.object(cli, "fetch_gdelt", return_value={"items": [], "item_count": 0}) as gd:
-                # discovery_store doesn't exist yet (lands in U4). Stub the import.
-                import sys, types
-                stub = types.ModuleType("signal_room.discovery_store")
-                stub.write_merged_discovered_items = MagicMock(return_value={"item_count": 0, "items": []})
-                sys.modules["signal_room.discovery_store"] = stub
-                try:
+                with patch.object(discovery_store, "write_merged_discovered_items", return_value={"item_count": 0, "items": []}) as merge:
                     with patch.object(cli, "_emit"):
                         rc = cli.main(["fetch", "--backend", "both"])
-                finally:
-                    sys.modules.pop("signal_room.discovery_store", None)
         self.assertEqual(rc, 0)
         l30.assert_called_once()
         gd.assert_called_once()
         # Both call sites pass output_path=None so neither writes solo.
         self.assertIsNone(l30.call_args.kwargs["output_path"])
         self.assertIsNone(gd.call_args.kwargs["output_path"])
-        stub.write_merged_discovered_items.assert_called_once()
+        merge.assert_called_once()
 
     def test_unknown_backend_argparse_error(self):
         from signal_room import cli

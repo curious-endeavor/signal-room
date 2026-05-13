@@ -113,31 +113,15 @@ def main(argv: Sequence[str] = None) -> int:
 
     if args.command == "fetch":
         try:
-            if args.backend == "last30days":
-                summary = fetch_last30days(
-                    mock=args.mock,
-                    query_limit=args.query_limit or None,
-                    lookback_days=args.lookback_days or None,
-                )
-            elif args.backend == "gdelt":
-                summary = fetch_gdelt(
-                    pillars=_parse_pillars(args.pillars),
-                    timespan=args.timespan or None,
-                    max_records=args.max or None,
-                    mock=args.mock,
-                )
-            elif args.backend == "both":
-                summary = _fetch_both(
-                    mock=args.mock,
-                    query_limit=args.query_limit or None,
-                    lookback_days=args.lookback_days or None,
-                    pillars=_parse_pillars(args.pillars),
-                    timespan=args.timespan or None,
-                    max_records=args.max or None,
-                )
-            else:
-                parser.error("Unknown fetch backend")
-                return 2
+            summary = _dispatch_fetch(
+                backend=args.backend,
+                mock=args.mock,
+                query_limit=args.query_limit or None,
+                lookback_days=args.lookback_days or None,
+                pillars=_parse_pillars(args.pillars),
+                timespan=args.timespan or None,
+                max_records=args.max or None,
+            )
         except (Last30DaysError, GdeltError) as exc:
             if args.emit == "json":
                 print(json.dumps({"ok": False, "error": str(exc)}, indent=2, sort_keys=True))
@@ -269,26 +253,35 @@ def _parse_pillars(raw: str):
     return [p.strip() for p in raw.split(",") if p.strip()]
 
 
-def _fetch_both(mock, query_limit, lookback_days, pillars, timespan, max_records):
-    """Run both backends and persist a deduped payload via discovery_store."""
-    from . import discovery_store  # local import; lands in U4
+def _dispatch_fetch(backend, mock, query_limit, lookback_days, pillars, timespan, max_records):
+    """Run one or both backends and persist a merged payload via discovery_store.
 
-    last30 = fetch_last30days(
-        mock=mock,
-        query_limit=query_limit,
-        lookback_days=lookback_days,
-        output_path=None,
-    )
-    gdelt = fetch_gdelt(
-        pillars=pillars,
-        timespan=timespan,
-        max_records=max_records,
-        mock=mock,
-        output_path=None,
-    )
+    All single-backend writes go through `write_merged_discovered_items` so
+    `first_seen_at` survives re-fetches and `meta.source` stays consistent.
+    """
+    from . import discovery_store
+
+    payloads = []
+    if backend in {"last30days", "both"}:
+        payloads.append(fetch_last30days(
+            mock=mock,
+            query_limit=query_limit,
+            lookback_days=lookback_days,
+            output_path=None,
+        ))
+    if backend in {"gdelt", "both"}:
+        payloads.append(fetch_gdelt(
+            pillars=pillars,
+            timespan=timespan,
+            max_records=max_records,
+            mock=mock,
+            output_path=None,
+        ))
+    if not payloads:
+        raise ValueError(f"Unknown fetch backend: {backend}")
     return discovery_store.write_merged_discovered_items(
         DISCOVERED_ITEMS_PATH,
-        [last30, gdelt],
+        payloads,
     )
 
 

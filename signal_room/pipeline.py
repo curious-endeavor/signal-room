@@ -3,7 +3,9 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from .digest import render_digest
+from .discovery_store import write_merged_discovered_items
 from .ingest import load_raw_items, source_candidates
+from .fetchers.gdelt import fetch_gdelt
 from .fetchers.last30days import DISCOVERED_ITEMS_PATH, fetch_last30days
 from .models import ScoredItem
 from .scoring import score_items
@@ -46,12 +48,24 @@ def run_pipeline(
     seed_payload = read_json(SEEDS_PATH, {"sources": []})
     weights = read_json(WEIGHTS_PATH, {})
     source_weights = read_json(SOURCE_WEIGHTS_PATH, {})
-    if fetch_backend == "last30days":
-        fetch_last30days(
-            mock=fetch_mock,
-            query_limit=fetch_query_limit or None,
-            lookback_days=fetch_lookback_days or None,
-        )
+    if fetch_backend in {"last30days", "gdelt", "both"}:
+        payloads = []
+        if fetch_backend in {"last30days", "both"}:
+            payloads.append(fetch_last30days(
+                mock=fetch_mock,
+                query_limit=fetch_query_limit or None,
+                lookback_days=fetch_lookback_days or None,
+                output_path=None,
+            ))
+        if fetch_backend in {"gdelt", "both"}:
+            payloads.append(fetch_gdelt(
+                pillars=fetch_pillars,
+                timespan=fetch_timespan or None,
+                max_records=fetch_max or None,
+                mock=fetch_mock,
+                output_path=None,
+            ))
+        write_merged_discovered_items(discovered_path, payloads)
     fixture_payload = read_json(fixture_path, {"items": []}) if include_fixtures else {"items": []}
     discovered_payload = read_json(discovered_path, {"items": []})
     feedback_events = read_jsonl(FEEDBACK_PATH)
