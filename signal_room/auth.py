@@ -28,13 +28,24 @@ PBKDF2_ITERATIONS = 100_000
 
 
 def _pepper() -> bytes:
-    """Server-side pepper. Falls back to a deterministic dev value if missing,
-    with a loud warning — prod MUST set this env var."""
+    """Server-side pepper. REQUIRED in production.
+
+    The fallback below exists only for local development. In production
+    (when SIGNAL_ROOM_ENV=production) a missing pepper raises immediately
+    so the deploy fails loud rather than silently using a public value.
+    Public-repo hygiene: an attacker reading this source could otherwise
+    forge cookies for any deployment that forgot to set the env var.
+    """
     val = os.environ.get(PEPPER_ENV, "")
-    if not val:
-        # Dev fallback. Don't ship to prod without setting the env.
-        return b"DEV-pepper-do-not-ship-this-to-prod"
-    return val.encode("utf-8")
+    if val:
+        return val.encode("utf-8")
+    if os.environ.get("SIGNAL_ROOM_ENV") == "production":
+        raise RuntimeError(
+            f"{PEPPER_ENV} env var is required in production. "
+            "Set a random secret (e.g. `openssl rand -hex 32`) in the Render dashboard."
+        )
+    # Local dev only. NOT a secret — public-repo readers can see this value.
+    return b"DEV-pepper-LOCAL-ONLY-prod-MUST-set-SIGNAL_ROOM_PASSCODE_PEPPER"
 
 
 def generate_passcode(length: int = 8) -> str:
