@@ -10,5 +10,6 @@ __pycache__/
 output/
 data/
 vendor/last30days-skill/
+bin/
 *.pyc
 *.egg-info/

@@ -80,6 +80,38 @@ Flags:
 - `--fixtures-only`: ignore discovered items and score fixtures only
 - `--emit json`: return machine-readable JSON for CLI consumers
 
+## GDELT Signal Source
+
+GDELT DOC 2.0 is a second discovery backend alongside `/last30days`. Where `last30days` covers social platforms and grounding search, GDELT covers worldwide *news media* in 65+ languages with a 3-month rolling window — keyless, no auth, courtesy-rate-limited to 1 request per 5 seconds. See [`docs/plans/2026-05-13-integrate-gdelt-source.md`](docs/plans/2026-05-13-integrate-gdelt-source.md) for the full contract (CLI flags, output JSON, gotchas).
+
+Build the vendored CLI binary once:
+
+```bash
+make build-gdelt        # produces bin/gdelt-pp-cli (requires Go ≥ 1.26.3)
+```
+
+Bootstrap the Alice pillars from `config/brands/alice/brief.yaml`:
+
+```bash
+python3 scripts/bootstrap_gdelt_pillars_from_alice.py
+```
+
+Fetch news for one or all pillars:
+
+```bash
+python3 -m signal_room fetch --backend gdelt --pillars chatbot-failures --timespan 1d --max 75
+python3 -m signal_room fetch --backend gdelt --pillars all --timespan 1d
+python3 -m signal_room fetch --backend both                       # last30days + gdelt, merged
+```
+
+Add a new pillar:
+
+1. Edit the `ALICE_PILLARS` dict at the top of `scripts/bootstrap_gdelt_pillars_from_alice.py` — add `name → boolean query`. Never mega-OR short-acronym statutes (e.g. `"EU AI Act" OR "AB 1988"` returns 0 hits even when each phrase alone matches — split into separate pillars).
+2. Re-run `python3 scripts/bootstrap_gdelt_pillars_from_alice.py` (idempotent; updates the existing query in place).
+3. Smoke-test: `python3 -m signal_room fetch --backend gdelt --pillars <new-name> --timespan 1d --max 5`.
+
+Rows from both backends merge into `data/discovered_items.json` via `signal_room/discovery_store.py`: URLs normalize (utm_*/fbclid/gclid stripped, trailing slash collapsed), `meta.source` becomes a sorted unique list when one article surfaces from both, and `first_seen_at` is preserved across re-fetches.
+
 ## Queryable Commands
 
 These commands are designed to be easier for agents and other tools to consume:
