@@ -66,6 +66,31 @@ def run_forever(poll_seconds: int = 5) -> None:
     store.initialize()
     mock = os.environ.get("SIGNAL_ROOM_FETCH_MOCK", "").lower() in {"1", "true", "yes"}
     max_parallel = max(1, int(os.environ.get("SIGNAL_ROOM_WORKER_PARALLEL", "3")))
+
+    # Self-heal orphaned runs: if the previous worker was killed mid-execution
+    # (Render redeploy, OOM, crash), its `status='running'` rows survive in
+    # the DB and permanently block `claim_next_brand_run` for that brand
+    # (which skips brands with any in-flight sibling). On every fresh boot
+    # we are the only worker, so any row still marked running is by
+    # definition orphaned — flip them to failed with a clear reason.
+    try:
+        orphans = store.fetchall(
+            "select id, brand from brand_runs where status = ?", ("running",)
+        )
+        for row in orphans:
+            store.mark_run_status(
+                row["id"], "failed",
+                error="Abandoned by previous worker (process restart). Re-queue to retry.",
+            )
+        if orphans:
+            print(
+                f"[worker] cleared {len(orphans)} orphaned running row(s): "
+                + ", ".join(f"{r['brand']}/{r['id']}" for r in orphans),
+                flush=True,
+            )
+    except Exception as exc:
+        print(f"[worker] orphan cleanup failed (continuing): {exc}", flush=True)
+
     print(f"[worker] started · max_parallel={max_parallel} · mock={mock} · slim={os.environ.get('SIGNAL_ROOM_SLIM_RUN','')}", flush=True)
     executor = ThreadPoolExecutor(max_workers=max_parallel, thread_name_prefix="sr-worker")
     in_flight: dict = {}  # future -> (brand, run_id)
