@@ -13,7 +13,11 @@
     <div id="chat-log" class="chat-log" data-session-id="{{ session_id }}">
       {% for m in messages %}
         <div class="msg msg-{{ m.role }}">
-          <div class="msg-body">{{ m.content }}</div>
+          {% if m.role == 'assistant' %}
+            <div class="msg-body">{{ m.content | render_chat_md | safe }}</div>
+          {% else %}
+            <div class="msg-body">{{ m.content }}</div>
+          {% endif %}
         </div>
       {% endfor %}
       {% if not messages %}
@@ -51,12 +55,19 @@
   if (!form) return;
   const sessionId = form.dataset.sessionId;
 
-  function appendMessage(role, body) {
+  function appendMessage(role, body, html) {
     const div = document.createElement('div');
     div.className = 'msg msg-' + role;
     const inner = document.createElement('div');
     inner.className = 'msg-body';
-    inner.textContent = body;
+    // Assistant turns get markdown-rendered HTML when the server provides
+    // it; everything else (user input, typing indicator, errors) stays as
+    // plain text so user-supplied content can never inject HTML.
+    if (html && role === 'assistant') {
+      inner.innerHTML = html;
+    } else {
+      inner.textContent = body;
+    }
     div.appendChild(inner);
     log.appendChild(div);
     log.scrollTop = log.scrollHeight;
@@ -110,7 +121,7 @@
         appendMessage('error', 'Error: ' + (data.error || 'unknown'));
         return;
       }
-      appendMessage('assistant', data.assistant);
+      appendMessage('assistant', data.assistant, data.assistant_html);
       if (data.ready_to_generate && finalizeSlot && !finalizeSlot.querySelector('form')) {
         finalizeSlot.innerHTML = '<form method="post" action="/{{ brand }}/onboarding/finalize" class="finalize-form"><button type="submit" class="primary-action finalize-btn">Generate brief &amp; finish →</button></form>';
       }

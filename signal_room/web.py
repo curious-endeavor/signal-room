@@ -26,6 +26,11 @@ STATIC_DIR = ROOT / "signal_room" / "static"
 app = FastAPI(title="Curious Endeavor Signal Room")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 templates = Jinja2Templates(directory=TEMPLATE_DIR)
+# Markdown renderer for assistant chat bubbles — registered as a Jinja filter
+# so the template can do `{{ msg | render_chat_md | safe }}` without each
+# route hand-rendering.
+from . import onboarding as _onb_for_filter
+templates.env.filters["render_chat_md"] = _onb_for_filter.render_assistant_markdown
 store = SignalRoomStore()
 
 
@@ -438,15 +443,37 @@ def _onboarding_kickoff(slug: str, brand_name: str, brand_url: str, chat_session
     try:
         crawl = _onb.crawl_brand(brand_url)
     except Exception as exc:
-        crawl = {"context": f"[crawl failed: {exc}]", "pages": [], "errors": [str(exc)]}
-    # Persist crawl context onto the session for use during chat + finalize.
+        crawl = {"context": f"[crawl failed: {exc}]", "pages": [], "errors": [str(exc)], "socials": {}}
+    crawl_ctx = crawl.get("context", "")
+    socials_from_crawl = crawl.get("socials") or {}
+
+    # Enrichment passes (each one is a Claude+web_search call, ~10-30s).
+    # Every failure path returns an empty value so the interview can fall
+    # back to asking the user.
+    try:
+        competitors = _onb.discover_competitors(brand_name, brand_url, crawl_ctx)
+    except Exception:
+        competitors = []
+    try:
+        socials = _onb.discover_socials_via_search(brand_name, brand_url, known=socials_from_crawl)
+    except Exception:
+        socials = socials_from_crawl
+    try:
+        voice = _onb.analyze_voice(brand_name, brand_url, crawl_ctx, socials=socials)
+    except Exception:
+        voice = {}
+
+    enrichment = {"competitors": competitors, "socials": socials, "voice": voice}
+    full_context = _onb.embed_enrichment(crawl_ctx, enrichment)
+    # Persist crawl context (+ enrichment blob) onto the session for use
+    # during chat + finalize.
     store.execute(
         "update chat_sessions set brand_context = ? where id = ?",
-        (crawl.get("context", "")[:30000], chat_session_id),
+        (full_context[:30000], chat_session_id),
     )
     # Generate the opening assistant turn.
     try:
-        first_msg = _onb.generate_initial_assistant_turn(brand_name, brand_url, crawl.get("context", ""))
+        first_msg = _onb.generate_initial_assistant_turn(brand_name, brand_url, full_context)
     except Exception as exc:
         first_msg = (
             f"Hi — I'm here to help build a Signal Room brief for {brand_name}. "
@@ -569,6 +596,7 @@ async def onboarding_chat(brand: str, request: Request, body: dict = None) -> JS
     return JSONResponse({
         "ok": True,
         "assistant": assistant_msg,
+        "assistant_html": _onb.render_assistant_markdown(assistant_msg),
         "ready_to_generate": _onb.is_ready_to_generate(assistant_msg),
     })
 
