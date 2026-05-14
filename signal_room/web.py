@@ -543,11 +543,49 @@ def onboarding_finalize(request: Request, brand: str) -> Any:
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Brief generation failed: {exc}")
+    # Tripwire for cross-brand contamination: refuse to persist a brief whose
+    # URL host doesn't match the brand row. Stash it on the session for audit
+    # rather than silently writing the wrong brand's content.
+    mismatch = _brief_host_mismatch(brand_row, brief)
+    if mismatch:
+        store.close_chat_session(session["id"], generated_brief_json=brief)
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Brief host mismatch — brand '{brand}' has url host "
+                f"'{mismatch['brand_host']}' but generated brief has host "
+                f"'{mismatch['brief_host']}'. Not writing. Inspect the session "
+                f"({session['id']}) and re-run onboarding."
+            ),
+        )
     store.update_brand_brief(brand, brief)
     store.close_chat_session(session["id"], generated_brief_json=brief)
     # Mirror to filesystem so projector + planner CLI still work.
     _mirror_brief_to_yaml(brand, brief)
     return RedirectResponse(url=f"/{brand}/brief", status_code=303)
+
+
+def _brief_host_mismatch(brand_row: dict, brief: dict) -> dict | None:
+    """Return mismatch info if the generated brief's URL host disagrees with
+    the brand row's URL host. Returns None when they match (or when we lack
+    enough info to compare — be lenient there, the guard is for catching
+    obvious cross-brand drift, not nitpicking missing fields).
+    """
+    from urllib.parse import urlparse as _urlparse
+    brand_url = (brand_row.get("url") or "").strip()
+    brief_url = (brief.get("url") or "").strip()
+    if not brand_url or not brief_url:
+        return None
+    def _host(u: str) -> str:
+        h = _urlparse(u).netloc.lower()
+        return h[4:] if h.startswith("www.") else h
+    bh = _host(brand_url)
+    fh = _host(brief_url)
+    if not bh or not fh:
+        return None
+    if bh == fh:
+        return None
+    return {"brand_host": bh, "brief_host": fh}
 
 
 def _mirror_brief_to_yaml(brand: str, brief: dict) -> None:

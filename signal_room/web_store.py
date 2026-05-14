@@ -193,6 +193,34 @@ class SignalRoomStore:
             (json.dumps(brief_json or {}), _now(), slug),
         )
 
+    def delete_brand(self, slug: str) -> dict[str, int]:
+        """Delete a brand row and everything that hangs off it.
+
+        Cascades to chat_sessions (+ their messages) and brand_runs. Returns a
+        dict of {table: rows_deleted} so callers can audit the blast radius.
+
+        There are no DB-level foreign keys (some backends are pglite/sqlite-ish),
+        so the cascade runs as explicit deletes in dependency order.
+        """
+        session_ids = [row["id"] for row in self.fetchall(
+            "select id from chat_sessions where brand_slug = ?", (slug,))]
+        msg_count = 0
+        for sid in session_ids:
+            rows = self.fetchall("select count(*) as c from chat_messages where session_id = ?", (sid,))
+            msg_count += int(rows[0]["c"]) if rows else 0
+            self.execute("delete from chat_messages where session_id = ?", (sid,))
+        self.execute("delete from chat_sessions where brand_slug = ?", (slug,))
+        run_rows = self.fetchall("select count(*) as c from brand_runs where brand = ?", (slug,))
+        run_count = int(run_rows[0]["c"]) if run_rows else 0
+        self.execute("delete from brand_runs where brand = ?", (slug,))
+        self.execute("delete from brands where slug = ?", (slug,))
+        return {
+            "brands": 1,
+            "chat_sessions": len(session_ids),
+            "chat_messages": msg_count,
+            "brand_runs": run_count,
+        }
+
     def update_brand_name(self, slug: str, name: str) -> None:
         self.execute(
             "update brands set name = ?, updated_at = ? where slug = ?",
