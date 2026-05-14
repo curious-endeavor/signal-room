@@ -190,7 +190,15 @@ def process_brand_refetch(store: SignalRoomStore, run: dict[str, Any], mock: boo
             # SIGNAL_ROOM_SLIM_QUERIES. Truncation happens on the wrapped projection
             # BEFORE we write discovery_queries.json or run the planner loop, so the
             # fetcher only ever sees the slim subset.
-            slim_run_for_queries = os.environ.get("SIGNAL_ROOM_SLIM_RUN", "").lower() in {"1", "true", "yes"}
+            #
+            # The per-run `slim` option (from the Refetch form) overrides the
+            # SIGNAL_ROOM_SLIM_RUN env var. Without this, `make dev-worker-slim`
+            # baked slim=on into every run regardless of UI choice — unchecking
+            # Slim in the form still truncated queries.
+            if options_slim is None:
+                slim_run_for_queries = os.environ.get("SIGNAL_ROOM_SLIM_RUN", "").lower() in {"1", "true", "yes"}
+            else:
+                slim_run_for_queries = bool(options_slim)
             if slim_run_for_queries:
                 q_cap = max(1, int(os.environ.get("SIGNAL_ROOM_SLIM_QUERIES", "4")))
                 sr_block = ((wrapped.get("projection") or {}).get("signal_room") or {})
@@ -214,6 +222,7 @@ def process_brand_refetch(store: SignalRoomStore, run: dict[str, Any], mock: boo
                     project_pillar_keywords as _proj_pk,
                     project_gdelt_pillars as _proj_gp,
                 )
+                from .projector.gdelt_query_generator import generate_gdelt_pillars as _llm_gdelt
                 projection = wrapped.get("projection") or {}
                 (brand_dir / "discovery_queries.json").write_text(
                     _json.dumps(_proj_dq(projection), indent=2) + "\n", encoding="utf-8")
@@ -221,13 +230,35 @@ def process_brand_refetch(store: SignalRoomStore, run: dict[str, Any], mock: boo
                     _json.dumps(_proj_ss(projection), indent=2) + "\n", encoding="utf-8")
                 (brand_dir / "pillar_keywords.json").write_text(
                     _json.dumps(_proj_pk(projection), indent=2) + "\n", encoding="utf-8")
-                # GDELT-shaped pillars (name + boolean query). Without this the
-                # GDELT fetcher reads ~/.config/gdelt-pp-cli/pillars.json — a
-                # global file that holds whatever brand was last operated on,
-                # producing the wrong-brand contamination we just diagnosed.
+                # GDELT-shaped pillars (name + boolean query). Two-tier path:
+                # 1. Ask Claude to build news-shaped boolean queries from the
+                #    brief — required entity + required AI/regulation modifier +
+                #    optional news verbs. Cached by content hash at
+                #    data/<brand>/gdelt_pillars.cache.json so this only pays
+                #    Claude when the brief changes.
+                # 2. On any Claude failure (network, parse, no API key), fall
+                #    back to the dumb keyword OR projection so a refetch still
+                #    runs — just with worse GDELT recall.
                 gdelt_pillars_path = brand_dir / "gdelt_pillars.json"
+                gdelt_cache = DATA_DIR / brand / "gdelt_pillars.cache.json"
+                try:
+                    gdelt_pillars_payload = _llm_gdelt(wrapped, brand, cache_path=gdelt_cache)
+                    cache_hit = gdelt_cache.exists() and _json.loads(gdelt_cache.read_text(encoding="utf-8")).get("pillars") == gdelt_pillars_payload.get("pillars")
+                    store.record_run_event(
+                        run_id,
+                        f"GDELT pillars: {len(gdelt_pillars_payload.get('pillars') or [])} LLM-generated "
+                        f"({'cache hit' if cache_hit else 'fresh Claude call'})",
+                        kind="running",
+                    )
+                except Exception as exc:
+                    gdelt_pillars_payload = _proj_gp(projection)
+                    store.record_run_event(
+                        run_id,
+                        f"GDELT LLM-query gen failed ({exc}); using keyword fallback",
+                        kind="warning",
+                    )
                 gdelt_pillars_path.write_text(
-                    _json.dumps(_proj_gp(projection), indent=2) + "\n", encoding="utf-8")
+                    _json.dumps(gdelt_pillars_payload, indent=2) + "\n", encoding="utf-8")
             except Exception as exc:
                 store.record_run_event(run_id, f"Projector failed: {exc}", kind="warning")
             store.record_run_event(run_id, f"Brief loaded from DB ({len(brief_dict_from_db.get('pillars') or [])} pillars, {len(((wrapped.get('projection') or {}).get('signal_room') or {}).get('discovery_queries') or [])} queries)", kind="running")
@@ -290,6 +321,41 @@ def process_brand_refetch(store: SignalRoomStore, run: dict[str, Any], mock: boo
         # instead of stalling at the worker's coarse "started pipeline" line.
         # Filter heavy/noisy events; reformat known stages into prose.
         _scoring_state = {"done": 0, "total": 0}
+        # Running cost meter — accumulated across every Claude call this run
+        # (planner + LLM scorer + brief-finalize, anything that emits
+        # `llm_usage`). Pricing is per-million-tokens, USD. Sonnet rates as of
+        # 2026-05; if we add models, key off entry["model"]. Numbers chosen so
+        # the math works directly with cumulative tokens (no scaling later).
+        _SONNET_PRICING = {
+            "input": 3.0 / 1_000_000,
+            "cache_creation": 3.75 / 1_000_000,
+            "cache_read": 0.30 / 1_000_000,
+            "output": 15.0 / 1_000_000,
+        }
+        _cost_state = {
+            "input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "output_tokens": 0,
+            "calls": 0,
+            "last_event_calls": 0,
+        }
+
+        def _format_cost() -> str:
+            p = _SONNET_PRICING
+            cost = (
+                _cost_state["input_tokens"] * p["input"]
+                + _cost_state["cache_creation_input_tokens"] * p["cache_creation"]
+                + _cost_state["cache_read_input_tokens"] * p["cache_read"]
+                + _cost_state["output_tokens"] * p["output"]
+            )
+            total_tokens = (
+                _cost_state["input_tokens"]
+                + _cost_state["cache_creation_input_tokens"]
+                + _cost_state["cache_read_input_tokens"]
+                + _cost_state["output_tokens"]
+            )
+            return f"${cost:.3f} · {_cost_state['calls']} calls · {total_tokens:,} tokens"
 
         def _bridge(entry):
             stage = entry.get("stage", "")
@@ -368,7 +434,31 @@ def process_brand_refetch(store: SignalRoomStore, run: dict[str, Any], mock: boo
                 fit = parsed.get("fit") or ""
                 msg = f"Scoring: {_scoring_state['done']}/{_scoring_state['total']} · {score_str} · {fit:13s} · {title}"
                 count = _scoring_state["done"]
+            elif stage == "llm_usage":
+                # Accumulate token usage and emit a running cost line every 10
+                # calls (or sooner if it's the first call). Lets the user see
+                # cost climb live during long runs and catch a runaway before
+                # it gets expensive.
+                _cost_state["input_tokens"] += int(payload.get("input_tokens", 0) or 0)
+                _cost_state["cache_creation_input_tokens"] += int(payload.get("cache_creation_input_tokens", 0) or 0)
+                _cost_state["cache_read_input_tokens"] += int(payload.get("cache_read_input_tokens", 0) or 0)
+                _cost_state["output_tokens"] += int(payload.get("output_tokens", 0) or 0)
+                _cost_state["calls"] += 1
+                if (
+                    _cost_state["calls"] == 1
+                    or _cost_state["calls"] - _cost_state["last_event_calls"] >= 10
+                ):
+                    _cost_state["last_event_calls"] = _cost_state["calls"]
+                    msg = f"Cost: {_format_cost()}"
+                else:
+                    msg = None
             elif stage == "llm_scoring_complete":
+                # Emit a final cost line so the run always ends with the total
+                # even if it didn't fall on a 10-call boundary.
+                if _cost_state["calls"] > _cost_state["last_event_calls"]:
+                    store.record_run_event(
+                        run_id, f"Cost: {_format_cost()} (final)", kind="complete"
+                    )
                 msg = f"Scoring: complete ({payload.get('scored_count', _scoring_state['done'])} items)"
                 count = int(payload.get("scored_count") or _scoring_state["done"])
                 kind = "complete"

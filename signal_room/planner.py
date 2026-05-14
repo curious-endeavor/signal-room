@@ -163,7 +163,18 @@ def _ask_claude(system: str, user: str, api_key: str, model: str, max_retries: i
             backoff = min(backoff * 2, 60)
             continue
         r.raise_for_status()
-        text = r.json()["content"][0]["text"].strip()
+        resp = r.json()
+        # Emit usage so the worker's cost meter counts planner calls too.
+        from .tracer import tracer as _tracer
+        usage = resp.get("usage") or {}
+        _tracer.record("llm_usage", {
+            "model": model,
+            "input_tokens": int(usage.get("input_tokens") or 0),
+            "cache_creation_input_tokens": int(usage.get("cache_creation_input_tokens") or 0),
+            "cache_read_input_tokens": int(usage.get("cache_read_input_tokens") or 0),
+            "output_tokens": int(usage.get("output_tokens") or 0),
+        })
+        text = resp["content"][0]["text"].strip()
         last_text = text
         break
     else:
