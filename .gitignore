@@ -13,3 +13,18 @@ vendor/last30days-skill/
 bin/
 *.pyc
 *.egg-info/
+
+# Vim swap files
+*.swp
+
+# Local-only notes
+/meeting-notes/
+
+# Local symlink to external printing-press binary
+/gdelt-pp-cli
+
+# Local-only UI previews
+/ui-preview/
+
+# Generated per-brand plans (output, not source)
+/config/brands/*/plans/
