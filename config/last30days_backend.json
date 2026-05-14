@@ -1,14 +1,13 @@
 {
   "python_command": "/Users/danpeguine/Projects/curious-endeavor/.venvs/last30days/bin/python",
   "last30days_home": "/Users/danpeguine/Projects/curious-endeavor/vendor/last30days-skill",
-  "lookback_days": 2,
+  "lookback_days": 7,
   "quick": false,
   "default_search_sources": [
     "grounding",
     "x",
     "youtube",
     "instagram",
-    "github",
     "reddit",
     "hackernews"
   ],

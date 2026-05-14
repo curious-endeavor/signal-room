@@ -28,3 +28,4 @@ bin/
 
 # Generated per-brand plans (output, not source)
 /config/brands/*/plans/
+.worktrees

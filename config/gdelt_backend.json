@@ -1,7 +1,7 @@
 {
   "binary_path": null,
   "pillars_path": "~/.config/gdelt-pp-cli/pillars.json",
-  "default_timespan": "1d",
+  "default_timespan": "7d",
   "default_max": 75,
   "rate_limit_rps": 0.2,
   "timeout_seconds": 60
