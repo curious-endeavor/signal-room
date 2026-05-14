@@ -114,6 +114,23 @@ def render_digest(items: Iterable[ScoredItem], output_path: Path) -> None:
       margin-bottom: 4px;
       letter-spacing: 0.04em;
     }}
+    .cluster {{
+      margin: 10px 0 4px;
+      padding: 10px 12px;
+      border-left: 3px solid var(--accent);
+      background: #f1efe7;
+      border-radius: 0 6px 6px 0;
+    }}
+    .cluster strong {{
+      display: block;
+      font-size: 12px;
+      text-transform: uppercase;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+      margin-bottom: 6px;
+    }}
+    .cluster ul {{ margin: 0; padding-left: 16px; font-size: 13px; }}
+    .cluster li {{ margin-bottom: 3px; }}
     code {{
       display: block;
       white-space: pre-wrap;
@@ -166,6 +183,7 @@ def _render_card(rank: int, item: ScoredItem) -> str:
     ]
     field_html = "\n".join(_field(label, value) for label, value in fields)
     candidate = '<span class="candidate">Candidate source</span>' if item.candidate_source else "Trusted/seeded source"
+    cluster_block = _cluster_block(item)
     return f"""
     <article class="card" id="{escape(item.id)}">
       <div class="card-head">
@@ -178,12 +196,34 @@ def _render_card(rank: int, item: ScoredItem) -> str:
         <div class="score">{item.score:.0f}</div>
       </div>
       <div class="chips">{chips}</div>
-      <p>{escape(item.summary)}</p>
+      <p>{escape(item.summary)}</p>{cluster_block}
       <div class="grid">
         {field_html}
       </div>
     </article>
 """
+
+
+def _cluster_block(item: ScoredItem) -> str:
+    """Render the 'covered by N more outlets' block when the LLM-emitted
+    story_key grouped near-duplicate articles together. Empty string when
+    this item is a singleton."""
+    meta = item.metadata or {}
+    members = meta.get("cluster_members") or []
+    if not members:
+        return ""
+    size = meta.get("cluster_size") or (len(members) + 1)
+    rows = "\n".join(
+        f'<li><a href="{escape(m.get("source_url",""))}">{escape(m.get("source",""))}</a> '
+        f'<span class="muted">· {int(m.get("score",0))}</span> '
+        f'<span class="muted">— {escape((m.get("title") or "")[:90])}</span></li>'
+        for m in members
+    )
+    return f"""
+      <div class="cluster">
+        <strong>+{len(members)} more outlets covered this</strong>
+        <ul>{rows}</ul>
+      </div>"""
 
 
 def _chips(item: ScoredItem) -> str:

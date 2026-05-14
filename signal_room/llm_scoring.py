@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import time
 from collections import Counter
@@ -181,6 +182,7 @@ Every text field obeys the voice and stop-slop rules above. Be concise. Be speci
   "score": <integer 0-100>,
   "pillar": "P1" | "P2" | "P3" | "P4" | "P5" | null,
   "fit": "core" | "adjacent" | "tangential" | "off-territory",
+  "story_key": "<kebab-case slug identifying the underlying news event so duplicates from different outlets collapse. Same real-world event = same key. 3-6 words, lowercase, hyphens. Focus on the event, not the outlet's framing. Examples: openai-chatgpt-teen-overdose-lawsuit-2026, palo-alto-idira-launch-2026, eu-ai-act-august-deadline. Use 'unique' when this is genuinely one-of-a-kind.>",
   "good_for_brand_because": "<max 14 words. Just the reason — NO 'Good for [BRAND] because' prefix. Plain claim about why this lands on the brand's territory.>",
   "action_type": "comment" | "retweet" | "quote_post" | "dm" | "op_ed_pitch" | "partnership_reach" | "publish_original" | "skip",
   "priority": <integer 0|1|2|3>,
@@ -240,17 +242,18 @@ def _ask_claude(system_prompt: str, user: str, api_key: str, model: str, max_ret
             continue
         r.raise_for_status()
         payload = r.json()
-        # Track cache hit-rate so we can verify ephemeral caching is actually
-        # paying off across a run. usage["cache_read_input_tokens"] should be
-        # ~brief_prompt_size for every call after the first within 5 minutes.
+        # Always emit usage so the worker can sum it into a running cost
+        # meter — including non-cache-aware calls. Cache fields default to 0
+        # when absent; the model pricing in worker.py treats them
+        # multiplicatively so missing fields cost $0.
         usage = payload.get("usage") or {}
-        if usage.get("cache_read_input_tokens") or usage.get("cache_creation_input_tokens"):
-            tracer.record("llm_cache_usage", {
-                "input_tokens": usage.get("input_tokens"),
-                "cache_creation_input_tokens": usage.get("cache_creation_input_tokens"),
-                "cache_read_input_tokens": usage.get("cache_read_input_tokens"),
-                "output_tokens": usage.get("output_tokens"),
-            })
+        tracer.record("llm_usage", {
+            "model": model,
+            "input_tokens": int(usage.get("input_tokens") or 0),
+            "cache_creation_input_tokens": int(usage.get("cache_creation_input_tokens") or 0),
+            "cache_read_input_tokens": int(usage.get("cache_read_input_tokens") or 0),
+            "output_tokens": int(usage.get("output_tokens") or 0),
+        })
         text = payload["content"][0]["text"].strip()
         break
     else:
@@ -323,6 +326,14 @@ def score_items_with_brief(
             angle = action_text  # reuse field for back-compat
             take = action_text
             follow_up = d.get("follow_up_query") or ""
+            # story_key clusters near-duplicate stories from different outlets
+            # (e.g. 4 different articles covering the same OpenAI lawsuit) so
+            # the digest can collapse them. Sanitize to a safe slug; default
+            # to the item id so a missing key never causes false clustering.
+            raw_key = (d.get("story_key") or "").strip().lower()
+            story_key = re.sub(r"[^a-z0-9-]+", "-", raw_key).strip("-")[:120]
+            if not story_key or story_key == "unique":
+                story_key = f"unique-{item.id[:12]}"
         except Exception as e:
             print(f"  [{i}] ERROR: {e}", flush=True)
             error_msg = str(e)
@@ -338,6 +349,7 @@ def score_items_with_brief(
             angle = ""
             take = ""
             follow_up = ""
+            story_key = f"unique-{item.id[:12]}"
 
         print(f"  [{i}/{len(items_list)}] {int(score):3d} {fit:13s} {pillar_fit or '[—]'} · {item.title[:60]}", flush=True)
 
@@ -395,7 +407,7 @@ def score_items_with_brief(
                 feedback_counts={},
                 source_weight=0.0,
                 engagement=item.engagement,
-                metadata={**(item.metadata or {}), "scoring_method": "llm", "fit": fit, "tldr": tldr, "action_type": action_type, "priority": priority, "effort_minutes": effort_min, "action_text": action_text},
+                metadata={**(item.metadata or {}), "scoring_method": "llm", "fit": fit, "tldr": tldr, "action_type": action_type, "priority": priority, "effort_minutes": effort_min, "action_text": action_text, "story_key": story_key},
                 engagement_score=item.engagement_score,
                 local_rank_score=item.local_rank_score,
                 local_relevance=item.local_relevance,

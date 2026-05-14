@@ -261,7 +261,51 @@ def run_pipeline(
             "scored_count": len(scored_items),
             "score_distribution": _score_buckets(scored_items),
         })
-    top_items = scored_items[:limit]
+    # Cluster near-duplicate stories by LLM-emitted `story_key` in metadata.
+    # Same key (e.g. "openai-chatgpt-teen-overdose-lawsuit-2026") = same
+    # underlying event across multiple outlets. The highest-scored item in
+    # each cluster becomes the representative; the rest get attached as
+    # `cluster_members` in its metadata so the digest can show a "+N more
+    # outlets" pickup signal. Items without a story_key (or older runs
+    # that pre-date the field) cluster individually by their own id.
+    clusters: dict[str, list] = {}
+    cluster_order: list[str] = []
+    for item in scored_items:
+        key = (item.metadata or {}).get("story_key") or f"unique-{item.id[:12]}"
+        if key not in clusters:
+            clusters[key] = []
+            cluster_order.append(key)
+        clusters[key].append(item)
+
+    deduped: list = []
+    for key in cluster_order:
+        members = sorted(clusters[key], key=lambda s: s.score, reverse=True)
+        rep = members[0]
+        if len(members) > 1:
+            rep.metadata = {
+                **(rep.metadata or {}),
+                "cluster_size": len(members),
+                "cluster_members": [
+                    {
+                        "id": m.id,
+                        "title": m.title,
+                        "source": m.source,
+                        "source_url": m.source_url,
+                        "score": m.score,
+                    }
+                    for m in members[1:]
+                ],
+            }
+        deduped.append(rep)
+    deduped.sort(key=lambda s: s.score, reverse=True)
+    tracer.record("story_clustering", {
+        "raw_scored": len(scored_items),
+        "after_dedup": len(deduped),
+        "clusters_with_dupes": sum(1 for k in clusters if len(clusters[k]) > 1),
+        "largest_cluster": max((len(v) for v in clusters.values()), default=0),
+    })
+
+    top_items = deduped[:limit]
     digest_filename = (
         f"signal-room-digest-{data_suffix}-{date.today().isoformat()}.html"
         if data_suffix else f"signal-room-digest-{date.today().isoformat()}.html"
