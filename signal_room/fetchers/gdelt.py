@@ -13,6 +13,7 @@ import json
 import os
 import re
 import subprocess
+import time
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -143,6 +144,7 @@ def fetch_gdelt(
     run_root: Optional[Path] = None,
     output_path: Optional[Path] = DISCOVERED_ITEMS_PATH,
     continue_on_error: bool = True,
+    pillars_path: Optional[Path] = None,
 ) -> Dict[str, Any]:
     """Pull one or more GDELT pillars and normalize into signal-room rows.
 
@@ -195,7 +197,10 @@ def fetch_gdelt(
                 "skip_reason": str(exc),
             }
 
-    pillar_names = list(pillars) if pillars else _list_pillars(mock=mock)
+    pillar_names = list(pillars) if pillars else _list_pillars(
+        mock=mock,
+        pillars_path=str(pillars_path) if pillars_path else None,
+    )
 
     tracer.record("gdelt_started", {
         "pillar_count": len(pillar_names),
@@ -209,7 +214,18 @@ def fetch_gdelt(
     runs: List[Dict[str, Any]] = []
     errors: List[Dict[str, str]] = []
 
-    for pillar in pillar_names:
+    # GDELT public API rate-limits at one request per 5s. Honour the configured
+    # rate_limit_rps so multi-pillar runs don't 429 themselves.
+    rate_rps = float(_load_backend_config().get("rate_limit_rps", 0.2) or 0)
+    min_interval = (1.0 / rate_rps) if rate_rps > 0 else 0.0
+    last_call_ts = 0.0
+
+    pillars_path_str = str(pillars_path) if pillars_path else None
+    for idx, pillar in enumerate(pillar_names):
+        if min_interval > 0 and idx > 0:
+            wait = min_interval - (time.time() - last_call_ts)
+            if wait > 0:
+                time.sleep(wait)
         try:
             run = _pull_pillar(
                 pillar=pillar,
@@ -217,7 +233,9 @@ def fetch_gdelt(
                 max_records=max_records,
                 mock=mock,
                 run_root=run_root,
+                pillars_path=pillars_path_str,
             )
+            last_call_ts = time.time()
         except GdeltError as exc:
             errors.append({"pillar": pillar, "error": str(exc)})
             tracer.record("gdelt_pillar_error", {"pillar": pillar, "error": str(exc)})
@@ -277,16 +295,26 @@ def fetch_gdelt(
 # ---------------------------------------------------------------------------
 
 
-def _list_pillars(mock: bool) -> List[str]:
+def _list_pillars(mock: bool, pillars_path: Optional[str] = None) -> List[str]:
     if mock:
         # In mock mode the fixture stands in for a single pillar pull.
         return ["chatbot-failures"]
     binary = _resolve_binary()
+    # Critical: pass the per-brand pillars file to `pillar list` too. Without
+    # it the CLI reads ~/.config/gdelt-pp-cli/pillars.json (a global file that
+    # holds whatever brand was last used) and returns the wrong brand's pillar
+    # names — which then trip "no pillar named X" errors when _pull_pillar
+    # tries those names against the correct brand file.
+    env = dict(os.environ)
+    effective_pillars_path = pillars_path or _resolve_pillars_path()
+    if effective_pillars_path:
+        env["GDELT_PILLARS_PATH"] = str(effective_pillars_path)
     result = subprocess.run(
         [binary, "pillar", "list", "--json"],
         capture_output=True,
         text=True,
         check=False,
+        env=env,
         timeout=_resolve_timeout(),
     )
     if result.returncode != EXIT_OK:
@@ -308,6 +336,7 @@ def _pull_pillar(
     max_records: int,
     mock: bool,
     run_root: Path,
+    pillars_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     run_dir = run_root / pillar
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -355,9 +384,12 @@ def _pull_pillar(
         "--json",
     ]
     env = dict(os.environ)
-    pillars_path = _resolve_pillars_path()
-    if pillars_path and "GDELT_PILLARS_PATH" not in env:
-        env["GDELT_PILLARS_PATH"] = pillars_path
+    # Per-run pillars_path (passed down from fetch_gdelt) wins over both env
+    # var and global backend-config default. This is how brand-specific GDELT
+    # pillars override the home-dir global file.
+    effective_pillars_path = pillars_path or _resolve_pillars_path()
+    if effective_pillars_path:
+        env["GDELT_PILLARS_PATH"] = str(effective_pillars_path)
 
     timeout_seconds = _resolve_timeout()
     manifest: Dict[str, Any] = {

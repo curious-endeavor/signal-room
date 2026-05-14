@@ -5,10 +5,6 @@
 {% set status = run.status if run and run.status else '' %}
 {% set is_terminal = status in ('done', 'failed') %}
 
-{% if not is_terminal and run %}
-  <meta http-equiv="refresh" content="5">
-{% endif %}
-
 <section class="brand-header">
   <div class="brand-header-top">
     <div>
@@ -17,9 +13,43 @@
     </div>
     <div class="brand-header-actions">
       <a href="/{{ brand }}/brief" class="text-link">Edit brief</a>
-      <form method="post" action="/{{ brand }}/refetch">
-        <button type="submit" class="primary-action">Refetch</button>
+      <form method="post" action="/{{ brand }}/refetch" class="refetch-form" data-refetch-brand="{{ brand }}">
+        <div class="refetch-options">
+          <label class="opt"><input type="checkbox" name="reuse_cache"> Reuse cached fetch <span class="dim">(skip planning + fetch)</span></label>
+          <div class="opt-row">
+            <span class="opt-label">Channels:</span>
+            <label class="opt"><input type="checkbox" name="ch_last30days" checked> last30days</label>
+            <label class="opt"><input type="checkbox" name="ch_gdelt" checked> GDELT</label>
+          </div>
+          <label class="opt"><input type="checkbox" name="slim" checked> Slim mode <span class="dim">(cap 10×pillars items · uncheck for full run ~$20+)</span></label>
+          <input type="hidden" name="slim_unset" value="1">
+        </div>
+        <button type="submit" class="primary-action">Refetch →</button>
       </form>
+      <script>
+      (function () {
+        // Remember the user's refetch options per-brand across navigations.
+        // Without this the form re-renders to default on every page load and
+        // a user iterating with "cache + gdelt only" keeps losing their choice
+        // every time they click Refetch and the browser reloads the run page.
+        const form = document.querySelector('.refetch-form');
+        if (!form) return;
+        const brand = form.dataset.refetchBrand;
+        const key = 'refetch-options-' + brand;
+        const boxes = form.querySelectorAll('input[type="checkbox"]');
+        try {
+          const saved = JSON.parse(localStorage.getItem(key) || 'null');
+          if (saved && typeof saved === 'object') {
+            boxes.forEach(b => { if (b.name in saved) b.checked = !!saved[b.name]; });
+          }
+        } catch (_) { /* localStorage blocked or corrupt — fall back to template defaults */ }
+        form.addEventListener('submit', () => {
+          const state = {};
+          boxes.forEach(b => { state[b.name] = b.checked; });
+          try { localStorage.setItem(key, JSON.stringify(state)); } catch (_) {}
+        });
+      })();
+      </script>
     </div>
   </div>
 
@@ -53,6 +83,117 @@
     </div>
   {% endif %}
 </section>
+
+{% if has_run %}
+  <section class="live-view" data-brand="{{ brand }}" data-run-id="{{ run.id }}" data-initial-status="{{ status }}">
+    <div class="live-view-header">
+      <span class="live-view-label">live view · run {{ run.id }}</span>
+      <span class="live-view-status" data-role="status">{{ status }}</span>
+    </div>
+    <pre class="live-view-log" data-role="log" aria-live="polite"><span class="live-view-placeholder">waiting for events…</span></pre>
+  </section>
+{% endif %}
+
+<script>
+(function () {
+  const root = document.querySelector('.live-view');
+  if (!root) return;
+  const brand = root.dataset.brand;
+  const runId = root.dataset.runId;
+  const initialStatus = root.dataset.initialStatus || '';
+  const log = root.querySelector('[data-role="log"]');
+  const statusEl = root.querySelector('[data-role="status"]');
+  let since = 0;
+  let stopped = false;
+  let consecutiveErrors = 0;
+  let placeholderCleared = false;
+
+  function fmtTime(iso) {
+    if (!iso) return '';
+    // created_at is stored as ISO; show HH:MM:SS so the panel feels like a tail -f
+    const m = iso.match(/T(\d{2}:\d{2}:\d{2})/);
+    return m ? m[1] : iso.slice(11, 19);
+  }
+
+  function appendEvents(events) {
+    if (!events || !events.length) return;
+    if (!placeholderCleared) {
+      log.innerHTML = '';
+      placeholderCleared = true;
+    }
+    const wasAtBottom = (log.scrollHeight - log.scrollTop - log.clientHeight) < 24;
+    for (const e of events) {
+      const line = document.createElement('div');
+      line.className = 'live-line live-line-' + (e.kind || 'info');
+      const t = document.createElement('span'); t.className = 'live-t'; t.textContent = fmtTime(e.created_at) + ' ';
+      const k = document.createElement('span'); k.className = 'live-k'; k.textContent = '[' + (e.kind || 'info').padEnd(7).slice(0, 7) + '] ';
+      const m = document.createElement('span'); m.className = 'live-m'; m.textContent = e.message || '';
+      line.appendChild(t); line.appendChild(k); line.appendChild(m);
+      if (e.source) {
+        const s = document.createElement('span'); s.className = 'live-s'; s.textContent = ' (' + e.source + ')';
+        line.appendChild(s);
+      }
+      log.appendChild(line);
+    }
+    if (wasAtBottom) log.scrollTop = log.scrollHeight;
+  }
+
+  function setStatus(s, error) {
+    statusEl.textContent = s || '';
+    statusEl.className = 'live-view-status live-view-status-' + (s || '');
+    if (s === 'failed' && error) {
+      const line = document.createElement('div');
+      line.className = 'live-line live-line-error';
+      line.textContent = '!! ' + error;
+      log.appendChild(line);
+      log.scrollTop = log.scrollHeight;
+    }
+  }
+
+  async function tick() {
+    if (stopped) return;
+    try {
+      const r = await fetch('/api/brands/' + brand + '/runs/' + runId + '/events?since=' + since, {
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const data = await r.json();
+      consecutiveErrors = 0;
+      appendEvents(data.events || []);
+      if (typeof data.last_id === 'number' && data.last_id > since) since = data.last_id;
+      setStatus(data.status, data.error);
+      if (data.status === 'done' || data.status === 'failed') {
+        stopped = true;
+        // One full page reload so the digest iframe + summary numbers refresh.
+        setTimeout(() => window.location.reload(), 800);
+        return;
+      }
+    } catch (err) {
+      consecutiveErrors += 1;
+      if (consecutiveErrors >= 5) {
+        const line = document.createElement('div');
+        line.className = 'live-line live-line-error';
+        line.textContent = '!! poll error: ' + err.message + ' — giving up';
+        log.appendChild(line);
+        stopped = true;
+        return;
+      }
+    }
+    setTimeout(tick, 1500);
+  }
+
+  // Only stream while the run is non-terminal. If page lands on a done/failed
+  // run, show whatever events landed in the DB so the user still sees history.
+  if (initialStatus === 'done' || initialStatus === 'failed') {
+    fetch('/api/brands/' + brand + '/runs/' + runId + '/events?since=0')
+      .then(r => r.json())
+      .then(data => { appendEvents(data.events || []); setStatus(data.status, data.error); })
+      .catch(() => {});
+  } else {
+    tick();
+  }
+})();
+</script>
 
 {% if has_run and status == 'done' and run.digest_html %}
   <section class="digest-embed">

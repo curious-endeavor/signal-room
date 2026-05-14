@@ -224,12 +224,30 @@ def brand_latest(request: Request, brand: str) -> Any:
 
 
 @app.post("/{brand}/refetch")
-def brand_refetch(brand: str, background_tasks: BackgroundTasks) -> RedirectResponse:
+async def brand_refetch(brand: str, request: Request, background_tasks: BackgroundTasks) -> RedirectResponse:
     _allowed_brand(brand)
-    run_id = store.create_brand_run(brand)
-    # In environments without a separate worker process (e.g. local dev), run
-    # inline as a background task. On Render the worker service picks it up
-    # from the queue regardless.
+    # Read the options form. All fields optional → defaults to a full both-channels,
+    # no-slim, no-cache run, matching the original Refetch button behavior.
+    options: dict | None = None
+    try:
+        form = await request.form()
+    except Exception:
+        form = {}
+    if form:
+        channels = []
+        if form.get("ch_last30days"): channels.append("last30days")
+        if form.get("ch_gdelt"): channels.append("gdelt")
+        if not channels:
+            channels = ["last30days", "gdelt"]
+        options = {
+            "reuse_cache": bool(form.get("reuse_cache")),
+            "channels": channels,
+        }
+        if form.get("slim"):
+            options["slim"] = True
+        elif "slim_unset" in form:
+            options["slim"] = False
+    run_id = store.create_brand_run(brand, options=options)
     if _inline_jobs_enabled():
         from .worker import process_brand_refetch
         background_tasks.add_task(process_brand_refetch, store, store.get_brand_run(run_id), _mock_fetch_enabled())
@@ -279,6 +297,30 @@ def brand_run_digest(brand: str, run_id: str) -> HTMLResponse:
     if not run or run.get("brand") != brand:
         raise HTTPException(status_code=404)
     return HTMLResponse(content=run.get("digest_html") or "<html><body><p>No digest.</p></body></html>")
+
+
+@app.get("/api/brands/{brand}/runs/{run_id}/events")
+def api_brand_run_events(brand: str, run_id: str, since: int = 0) -> JSONResponse:
+    """Stream-ish: return events with id > `since` for this run, oldest first.
+    Used by the terminal-style live view on /{brand}. Callers pass the highest
+    event id they've seen; the response includes the new high-water mark plus
+    the run's current status so the poller can stop on terminal states.
+    """
+    _allowed_brand(brand)
+    run = store.get_brand_run(run_id)
+    if not run or run.get("brand") != brand:
+        return JSONResponse({"ok": False, "error": "Run not found"}, status_code=404)
+    events = store.list_run_events_since(run_id, since_id=int(since or 0))
+    last_id = events[-1]["id"] if events else int(since or 0)
+    return JSONResponse({
+        "ok": True,
+        "run_id": run_id,
+        "status": run.get("status", ""),
+        "error": run.get("error", ""),
+        "since": int(since or 0),
+        "last_id": last_id,
+        "events": events,
+    })
 
 
 @app.get("/api/brands/{brand}/runs/latest")

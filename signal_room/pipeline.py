@@ -51,7 +51,14 @@ def run_pipeline(
     fetch_pillars=None,
     fetch_timespan=None,
     fetch_max=None,
+    slim_cap: int = 0,
+    channel_filter: list = None,
 ) -> Dict[str, Any]:
+    """If slim_cap > 0, raw_items are truncated to that many entries before
+    LLM scoring runs. Used in dev to iterate on scoring quality without paying
+    for 179 LLM calls every loop. Truncation is post-dedup, pre-score, so the
+    items that survive are a representative slice of what would have been
+    scored, just smaller."""
     ensure_dirs()
     # Per-brand isolation: when data_suffix is set, all intermediate writes go
     # to DATA_DIR/<suffix>/ so parallel runs against different brands don't
@@ -91,7 +98,17 @@ def run_pipeline(
             })
         except Exception as exc:
             tracer.record("brief_load_error", {"path": str(brief_path), "error": str(exc)})
-    if fetch_backend in {"last30days", "gdelt", "both"}:
+    # `cache` mode: skip both fetchers, reuse the existing discovered_items.json
+    # for this brand. Lets the user iterate on scoring/slim/digest without
+    # paying for ~5 minutes of vendor work + LLM planner calls every loop.
+    if fetch_backend == "cache":
+        if not discovered_path.exists():
+            tracer.record("cache_miss", {"discovered_path": str(discovered_path)})
+            raise FileNotFoundError(
+                f"No cached fetch at {discovered_path}. Run a normal Refetch first."
+            )
+        tracer.record("cache_reused", {"discovered_path": str(discovered_path)})
+    elif fetch_backend in {"last30days", "gdelt", "both"}:
         payloads = []
         if fetch_backend in {"last30days", "both"}:
             # Brand-aware path: load queries from the brand's config dir if
@@ -126,14 +143,30 @@ def run_pipeline(
                 queries=brand_queries,
                 output_path=None,
                 run_root=run_root,
+                # One slow / wedged vendor subprocess used to kill the whole
+                # pipeline. Keep going on per-query failures (timeout, JSON
+                # parse, vendor exit≠0) — the run_events log captures each
+                # individual error, and what we recover is more useful than
+                # nothing.
+                continue_on_error=True,
             ))
         if fetch_backend in {"gdelt", "both"}:
+            # Per-brand GDELT pillars file: the worker projects the brief's
+            # pillars (keywords) into gdelt_pillars.json (boolean queries) and
+            # drops it into brand_config_dir. Pass that path so GDELT uses the
+            # right brand's pillars instead of the global home-dir default.
+            brand_gdelt_pillars = None
+            if brand_config_dir:
+                candidate = Path(brand_config_dir) / "gdelt_pillars.json"
+                if candidate.exists():
+                    brand_gdelt_pillars = candidate
             payloads.append(fetch_gdelt(
                 pillars=fetch_pillars,
                 timespan=fetch_timespan or None,
                 max_records=fetch_max or None,
                 mock=fetch_mock,
                 output_path=None,
+                pillars_path=brand_gdelt_pillars,
             ))
         write_merged_discovered_items(discovered_path, payloads)
     fixture_payload = read_json(fixture_path, {"items": []}) if include_fixtures else {"items": []}
@@ -164,6 +197,62 @@ def run_pipeline(
             for item in raw_items[:50]
         ],
     })
+    # Channel filter (only meaningful when reading from cache): keep items
+    # whose discovery_method is in the allowed list. Lets the user say
+    # "rescore GDELT-only from cache" without disturbing the cached fetch.
+    if channel_filter:
+        allowed = set(channel_filter)
+        before = len(raw_items)
+        raw_items = [r for r in raw_items if (r.discovery_method or "") in allowed]
+        if before != len(raw_items):
+            tracer.record("channel_filter_applied", {
+                "allowed": sorted(allowed),
+                "before": before,
+                "after": len(raw_items),
+            })
+
+    # Slim-run: cap items before LLM scoring. Stratified by discovery_method
+    # so GDELT items (which come last in raw_items) don't get wiped out by a
+    # naive [:slim_cap]. Allocate the budget proportionally and pull in the
+    # original order within each bucket. Falls back to a flat truncate if
+    # there's only one source.
+    if slim_cap and slim_cap > 0 and len(raw_items) > slim_cap:
+        pre_slim_count = len(raw_items)
+        buckets: dict[str, list] = {}
+        for item in raw_items:
+            key = getattr(item, "discovery_method", None) or "unknown"
+            buckets.setdefault(key, []).append(item)
+        if len(buckets) <= 1:
+            kept = raw_items[:slim_cap]
+            allocation = {next(iter(buckets), "unknown"): len(kept)}
+        else:
+            total = sum(len(v) for v in buckets.values())
+            # First pass: floor allocation so we don't overshoot the cap.
+            allocation = {k: max(1, (slim_cap * len(v)) // total) for k, v in buckets.items()}
+            # Trim/grow so the totals match slim_cap exactly. Largest buckets
+            # absorb the residue.
+            diff = slim_cap - sum(allocation.values())
+            if diff != 0:
+                order = sorted(buckets.keys(), key=lambda k: -len(buckets[k]))
+                i = 0
+                step = 1 if diff > 0 else -1
+                while diff != 0 and i < len(order) * 4:
+                    k = order[i % len(order)]
+                    if allocation[k] + step >= 1 and allocation[k] + step <= len(buckets[k]):
+                        allocation[k] += step
+                        diff -= step
+                    i += 1
+            kept = []
+            for k, n in allocation.items():
+                kept.extend(buckets[k][:n])
+        raw_items = kept
+        tracer.record("slim_cap_applied", {
+            "cap": slim_cap,
+            "pre_count": pre_slim_count,
+            "post_count": len(raw_items),
+            "allocation": allocation,
+        })
+
     if brief_path:
         scored_items = score_items_with_brief(raw_items, brief_path, model=llm_model)
     else:

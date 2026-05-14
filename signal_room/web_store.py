@@ -100,6 +100,21 @@ class SignalRoomStore:
         )
         return [_decode_event(row) for row in reversed(rows)]
 
+    def list_run_events_since(self, run_id: str, since_id: int = 0,
+                              limit: int = 500) -> list[dict[str, Any]]:
+        """Stream events for a run with id > since_id, oldest first. Used by
+        the live-view poller — pass the highest id you've seen as `since`."""
+        rows = self.fetchall(
+            """
+            select * from run_events
+            where run_id = ? and id > ?
+            order by id asc
+            limit ?
+            """,
+            (run_id, int(since_id), limit),
+        )
+        return [_decode_event(row) for row in rows]
+
     def replace_run_items(self, run_id: str, items: list[dict[str, Any]]) -> None:
         with self.transaction() as conn:
             self._execute_conn(conn, "delete from items where run_id = ?", (run_id,))
@@ -294,15 +309,20 @@ class SignalRoomStore:
 
     # ----- brand_runs (per-brand pipeline runs surfaced to web) -----
 
-    def create_brand_run(self, brand: str) -> str:
+    def create_brand_run(self, brand: str, options: dict[str, Any] | None = None) -> str:
+        """`options` are persisted in plans_json under {"options": {...}} so the
+        worker can pick them up at run start. They're overwritten at the end
+        of the run when actual plans are stored, which is fine — options are
+        only needed at start. Keeps schema unchanged."""
         run_id = uuid.uuid4().hex[:12]
         now = _now()
+        plans_payload = json.dumps({"options": options}) if options else "{}"
         self.execute(
             """
             insert into brand_runs (id, brand, status, created_at, started_at, finished_at, error, summary_json, trace_jsonl, trace_html, digest_html, plans_json)
             values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (run_id, brand, "queued", now, "", "", "", "{}", "", "", "", "{}"),
+            (run_id, brand, "queued", now, "", "", "", "{}", "", "", "", plans_payload),
         )
         return run_id
 
@@ -330,6 +350,64 @@ class SignalRoomStore:
             ("queued",),
         )
         return _decode_brand_run(rows[0]) if rows else {}
+
+    def claim_next_brand_run(self) -> dict[str, Any]:
+        """Atomically pick the oldest queued run whose brand has no in-flight
+        sibling and flip it to `running`. Returns the claimed row, or {} when
+        nothing claimable. Used by the multi-threaded worker so two threads
+        never grab the same row, and so a single brand can't have two parallel
+        pipelines clobbering each other's per-brand data dir.
+
+        Two-step strategy that works on both Postgres and sqlite without
+        relying on FOR UPDATE SKIP LOCKED: select a candidate, then conditional
+        update where status is still 'queued'. If two threads collide, the
+        second one's UPDATE affects zero rows and it loops.
+        """
+        with self.connect() as conn:
+            # 1. Find a queued row whose brand has no row in `running` already.
+            rows = self._fetchall_with_conn(conn, """
+                select * from brand_runs
+                where status = ?
+                  and brand not in (
+                    select brand from brand_runs where status = ?
+                  )
+                order by created_at asc
+                limit 1
+            """, ("queued", "running"))
+            if not rows:
+                return {}
+            candidate = _decode_brand_run(rows[0])
+            run_id = candidate["id"]
+            # 2. Conditional claim — only succeeds if still queued.
+            now = _now()
+            cur = conn.execute(
+                _translate_sql(
+                    "update brand_runs set status = ?, started_at = ? "
+                    "where id = ? and status = ?",
+                    self.is_postgres,
+                ),
+                ("running", now, run_id, "queued"),
+            )
+            rowcount = getattr(cur, "rowcount", 1)
+            if not self.is_postgres:
+                conn.commit()
+            if rowcount == 0:
+                # Lost the race to another worker thread; caller should retry.
+                return {}
+            candidate["status"] = "running"
+            candidate["started_at"] = now
+            return candidate
+
+    def _fetchall_with_conn(self, conn, sql: str, params: tuple) -> list[dict[str, Any]]:
+        """Internal helper: run a SELECT on an existing connection so a claim
+        can do its SELECT + UPDATE in a single transaction."""
+        translated = _translate_sql(sql, self.is_postgres)
+        cur = conn.execute(translated, params)
+        if self.is_postgres:
+            cols = [d[0] for d in cur.description]
+            return [dict(zip(cols, row)) for row in cur.fetchall()]
+        cur.row_factory = sqlite3.Row
+        return [dict(row) for row in cur.fetchall()]
 
     def mark_brand_run_started(self, run_id: str) -> None:
         self.execute(

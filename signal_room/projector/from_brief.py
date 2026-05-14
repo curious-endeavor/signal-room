@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, List
@@ -82,6 +83,33 @@ def project_pillar_keywords(projection: Dict[str, Any]) -> Dict[str, List[str]]:
         if words:
             out[pid] = words
     return out
+
+
+def project_gdelt_pillars(projection: Dict[str, Any]) -> Dict[str, Any]:
+    """Compose GDELT-friendly pillars (name + boolean query string) from the
+    brief's keyword pillars. gdelt-pp-cli expects:
+      {"pillars": [{"name": "...", "query": "(\"kw1\" OR \"kw2\" OR ...)"}, ...]}
+
+    Pillars with fewer than 2 keywords are skipped — single-keyword queries
+    are too broad to produce useful GDELT results.
+    """
+    sr = (projection or {}).get("signal_room") or {}
+    out: List[Dict[str, str]] = []
+    for p in sr.get("pillars") or []:
+        if not isinstance(p, dict):
+            continue
+        raw_name = (p.get("id") or p.get("name") or "").strip()
+        if not raw_name:
+            continue
+        # Slug-ify so the name is shell-safe for gdelt-pp-cli.
+        name = re.sub(r"[^a-z0-9-]+", "-", raw_name.lower()).strip("-") or "pillar"
+        kws = [str(k).strip() for k in (p.get("keywords") or []) if str(k).strip()]
+        if len(kws) < 2:
+            continue
+        # GDELT understands phrase quoting and OR.
+        query = "(" + " OR ".join(f'"{k}"' for k in kws) + ")"
+        out.append({"name": name, "query": query})
+    return {"pillars": out}
 
 
 def project_seed_sources(projection: Dict[str, Any]) -> Dict[str, Any]:

@@ -1,8 +1,11 @@
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -10,7 +13,16 @@ from urllib.parse import urlparse
 from typing import Any, Dict, List, Optional
 
 from ..storage import CONFIG_DIR, LAST30DAYS_RUNS_DIR, ROOT, ensure_dirs, write_json
-from ..tracer import tracer
+from ..tracer import tracer, _get_tracer
+
+# Vendor stderr lines worth surfacing as live events. Skip ANSI spinners,
+# progress bars, and other noise that just clutters the live view.
+_VENDOR_LOG_INTERESTING = re.compile(
+    r"^\[(YouTube|GitHub|Reddit|X|Instagram|HackerNews|Hacker News|Grounding|Brave|Planner|Last30Days)\]"
+    r"|Found \d|Searching|fetched|error|Error|WARNING|Failed|timeout",
+    re.IGNORECASE,
+)
+_VENDOR_LOG_ANSI = re.compile(r"\x1b\[[0-9;]*m|⏳")
 
 
 DISCOVERY_QUERIES_PATH = CONFIG_DIR / "discovery_queries.json"

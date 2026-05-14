@@ -645,11 +645,27 @@ details summary {
 }
 
 .primary-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 44px;
   padding: 0 var(--s-5);
   font-size: 14px;
   font-weight: 500;
+  /* Self-styled so the class works on both <button> and <a> — previously the
+     anchor variants (e.g. home page "Create new brand") fell back to plain
+     link styling because `button {...}` only paints <button> elements. */
+  background: var(--ce-red);
+  color: #fff;
+  border: 1px solid var(--ce-red);
+  border-radius: var(--r-2);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--t-base), border-color var(--t-base), color var(--t-base);
 }
+a.primary-action:hover,
+button.primary-action:hover { background: var(--ce-black); border-color: var(--ce-black); color: #fff; }
+a.primary-action:visited { color: #fff; }
 
 .empty-state {
   margin-top: var(--s-3);
@@ -759,6 +775,68 @@ details summary {
 .chat-form textarea { flex: 1; resize: vertical; min-height: 50px; padding: 10px 14px; border: 1px solid var(--ce-border); border-radius: var(--r-2); font: inherit; }
 .chat-form textarea:focus { outline: none; border-color: var(--ce-black); }
 .chat-form button { min-height: 50px; }
+
+/* Refetch options form. Compact panel above the Refetch button. */
+.refetch-form { display: flex; flex-direction: column; gap: 12px; align-items: flex-end; }
+.refetch-options {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--ce-border);
+  border-radius: var(--r-3);
+  background: #fafafa;
+  font-size: 13px;
+  min-width: 280px;
+}
+.refetch-options .opt { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.refetch-options .opt-row { display: flex; gap: 16px; align-items: center; }
+.refetch-options .opt-label { color: var(--ce-grey); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+.refetch-options .dim { color: var(--ce-grey); font-size: 12px; }
+
+/* Live view — terminal-style event log for an in-progress brand run. */
+.live-view {
+  margin: var(--s-4) 0;
+  border: 1px solid #1a1f25;
+  border-radius: var(--r-3);
+  background: #0b0f14;
+  color: #d7e1ec;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  overflow: hidden;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.4) inset;
+}
+.live-view-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 14px;
+  background: #11161d;
+  border-bottom: 1px solid #1f262f;
+  color: #8b97a8;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 11px;
+}
+.live-view-status { font-weight: 600; }
+.live-view-status-running { color: #ffd166; }
+.live-view-status-queued { color: #8b97a8; }
+.live-view-status-done { color: #5dd39e; }
+.live-view-status-failed { color: #ff6b6b; }
+.live-view-log {
+  margin: 0; padding: 12px 14px;
+  max-height: 360px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.55;
+}
+.live-view-placeholder { color: #5a6675; font-style: italic; }
+.live-line { display: block; }
+.live-t { color: #6c7889; }
+.live-k { color: #8b97a8; }
+.live-s { color: #6c7889; }
+.live-line-info .live-k { color: #8b97a8; }
+.live-line-running .live-k { color: #6cbef0; }
+.live-line-complete .live-k { color: #5dd39e; }
+.live-line-warning .live-k { color: #ffd166; }
+.live-line-error .live-k, .live-line-error { color: #ff6b6b; }
 
 .finalize-form { margin-top: var(--s-4); padding-top: var(--s-3); border-top: var(--hair); }
 .finalize-btn { background: var(--ce-black); border-color: var(--ce-black); }

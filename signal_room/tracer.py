@@ -16,6 +16,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -30,6 +31,21 @@ class _Tracer:
         self._records: List[Dict[str, Any]] = []
         self._t0: float = 0.0
         self._started_at_iso: str = ""
+        # Hooks fired on every record() call. Used by the web worker to bridge
+        # tracer events into the run_events table so the terminal-style live
+        # view on /{brand}/runs/{run_id} can stream pipeline progress. Stored
+        # as a list so callers can add multiple listeners; cleared on disable.
+        self._listeners: List[Any] = []
+
+    def add_listener(self, callback) -> None:
+        """Register a callable invoked synchronously on each record().
+        callback(entry: dict) — `entry` matches the JSONL row shape.
+        Exceptions raised by listeners are swallowed so a buggy listener
+        can't take down the pipeline."""
+        self._listeners.append(callback)
+
+    def clear_listeners(self) -> None:
+        self._listeners = []
 
     @property
     def enabled(self) -> bool:
@@ -48,6 +64,7 @@ class _Tracer:
     def disable(self) -> None:
         self._enabled = False
         self._records = []
+        self._listeners = []
 
     def record(self, stage: str, payload: Dict[str, Any]) -> None:
         if not self._enabled:
@@ -58,6 +75,12 @@ class _Tracer:
             "payload": payload,
         }
         self._records.append(entry)
+        for cb in self._listeners:
+            try:
+                cb(entry)
+            except Exception:
+                # A listener must never crash the pipeline. Swallow and move on.
+                pass
 
     @property
     def records(self) -> List[Dict[str, Any]]:
@@ -100,5 +123,28 @@ class _Tracer:
         return html_path
 
 
-# Module-level singleton. Pipeline + scorers + fetchers import this.
-tracer = _Tracer()
+# Per-thread tracer. Each ThreadPoolExecutor worker (parallel brand pipelines)
+# gets its own _Tracer instance — `enable()`, `record()`, `flush()` calls from
+# thread A never clobber thread B's records or listeners. The original single-
+# threaded API (`from .tracer import tracer; tracer.record(...)`) keeps working
+# because every attribute access resolves to the calling thread's instance.
+_local = threading.local()
+
+
+def _get_tracer() -> "_Tracer":
+    inst = getattr(_local, "tracer", None)
+    if inst is None:
+        inst = _Tracer()
+        _local.tracer = inst
+    return inst
+
+
+class _TracerProxy:
+    """Thin attribute-forwarding shim so `tracer.xxx` always resolves to the
+    current thread's `_Tracer` instance. Keeps the import API stable."""
+
+    def __getattr__(self, name):
+        return getattr(_get_tracer(), name)
+
+
+tracer = _TracerProxy()
