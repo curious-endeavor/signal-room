@@ -215,14 +215,18 @@ def fetch_gdelt(
     errors: List[Dict[str, str]] = []
 
     # GDELT public API rate-limits at one request per 5s. Honour the configured
-    # rate_limit_rps so multi-pillar runs don't 429 themselves.
+    # rate_limit_rps so multi-pillar runs don't 429 themselves. Note that
+    # `_list_pillars` (if called) already burned one GDELT call moments before
+    # this loop — so we initialize last_call_ts to "now" and sleep before the
+    # FIRST pull too. Previous code only paused from idx=1 onward, which made
+    # the first pillar pull race against the pillar list call and trip 429.
     rate_rps = float(_load_backend_config().get("rate_limit_rps", 0.2) or 0)
     min_interval = (1.0 / rate_rps) if rate_rps > 0 else 0.0
-    last_call_ts = 0.0
+    last_call_ts = time.time()
 
     pillars_path_str = str(pillars_path) if pillars_path else None
-    for idx, pillar in enumerate(pillar_names):
-        if min_interval > 0 and idx > 0:
+    for pillar in pillar_names:
+        if min_interval > 0:
             wait = min_interval - (time.time() - last_call_ts)
             if wait > 0:
                 time.sleep(wait)
