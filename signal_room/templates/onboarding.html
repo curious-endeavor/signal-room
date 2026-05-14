@@ -67,6 +67,27 @@
     form.querySelector('button').disabled = on;
   }
 
+  // Finalize button: this is a real form POST that calls Claude server-side
+  // (~10-30s). The button stays clickable through that wait by default, so a
+  // jumpy user can fire two finalize requests and burn a second LLM call —
+  // and worse, race them against each other against the same chat session.
+  // Disable + swap to a spinner on first submit, then let the browser
+  // complete the navigation to /{brand}/brief.
+  document.addEventListener('submit', (e) => {
+    const f = e.target.closest && e.target.closest('.finalize-form');
+    if (!f) return;
+    const btn = f.querySelector('button');
+    if (!btn || btn.disabled) {
+      e.preventDefault();
+      return;
+    }
+    btn.dataset.originalLabel = btn.textContent;
+    btn.disabled = true;
+    btn.setAttribute('aria-busy', 'true');
+    btn.classList.add('is-loading');
+    btn.innerHTML = '<span class="spinner" aria-hidden="true"></span><span class="spinner-label">Generating brief…</span>';
+  }, true);
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const text = input.value.trim();

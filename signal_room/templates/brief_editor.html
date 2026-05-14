@@ -3,9 +3,9 @@
 {% block content %}
 
 <section class="brief-editor">
-  <p class="section-label">brief editor · {{ brand }}</p>
+  <p class="section-label">brief editor · {{ brand }}{% if brief_source %} · source: {{ brief_source }}{% endif %}</p>
   <h1 class="form-h1">{{ brief.name or brand }}'s brief</h1>
-  <p class="form-sub">Edit any field. Save when done. Your changes flow into every refetch.</p>
+  <p class="form-sub">Edit any field. Save when done. Your changes flow into every refetch.{% if brief_source == 'disk' %} <span class="dim">Loaded from <code>config/brands/{{ brand }}/brief.yaml</code> — save will write back to disk.</span>{% elif brief_source == 'empty' %} <span class="dim">No brief yet for this brand — fill anything you know and save.</span>{% endif %}</p>
 
   {% if saved %}
     <p class="toast">Brief saved · <a href="/{{ brand }}" class="text-link">→ Run a fresh refetch</a></p>

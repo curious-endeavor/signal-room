@@ -15,9 +15,12 @@
       <p class="section-label">brand</p>
       <h1 class="brand-name">{{ brand }}</h1>
     </div>
-    <form method="post" action="/{{ brand }}/refetch">
-      <button type="submit" class="primary-action">Refetch</button>
-    </form>
+    <div class="brand-header-actions">
+      <a href="/{{ brand }}/brief" class="text-link">Edit brief</a>
+      <form method="post" action="/{{ brand }}/refetch">
+        <button type="submit" class="primary-action">Refetch</button>
+      </form>
+    </div>
   </div>
 
   {% if not has_run %}

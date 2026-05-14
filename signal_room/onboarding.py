@@ -213,6 +213,9 @@ You already crawled the brand's site. Here's what you found:
 - If the user says "I don't know" or "skip", move to the next question.
 - Maximum 7 turns including yours. After turn 6 you MUST output READY_TO_GENERATE on the next turn even if questions remain.
 - Speak like a person, not a chatbot. Match the brand's tone if it's clear from the crawl.
+
+# Reading URLs the user pastes
+If the user pastes a URL into a message, the system fetches it server-side and appends the page's stripped text as a `<fetched url="...">...</fetched>` block right after their message. Treat that text as authoritative content the user wants you to read. Do not claim you cannot browse — when you see a `<fetched>` block, you have already read the page. If a `<fetched ... error="..." />` self-closing block appears, the fetch failed; tell the user what went wrong and ask them to paste the content directly.
 """
 
 
@@ -275,6 +278,67 @@ def is_ready_to_generate(assistant_msg: str) -> bool:
     return "READY_TO_GENERATE" in (assistant_msg or "")
 
 
+# Regex pulled out so we can test it cheaply; matches http(s) URLs up to the
+# first whitespace, ), >, ", or ' character. Trailing punctuation we trim by
+# hand so "...read https://x.com/foo." doesn't keep the dot.
+_URL_RE = re.compile(r"https?://[^\s)>\"']+", re.IGNORECASE)
+_URL_TRAILING_PUNCT = ".,;:!?)]}>"
+
+# Caps so a chat turn can't fan out into a crawl. Keep these small — the
+# onboarding interview is meant to be a conversation, not a research pass.
+MAX_URLS_PER_TURN = 3
+MAX_BYTES_PER_FETCHED_URL = 6000
+
+
+def extract_urls(message: str) -> list[str]:
+    """Pull http(s) URLs out of a chat message, deduped, in first-seen order."""
+    if not message:
+        return []
+    seen: set[str] = set()
+    out: list[str] = []
+    for raw in _URL_RE.findall(message):
+        url = raw.rstrip(_URL_TRAILING_PUNCT)
+        if url and url not in seen:
+            seen.add(url)
+            out.append(url)
+    return out
+
+
+def fetch_urls_for_chat(message: str, limit: int = MAX_URLS_PER_TURN) -> list[dict[str, str]]:
+    """Fetch up to `limit` URLs pasted into a chat turn. Returns a list of
+    {url, text, error} dicts so callers can choose how to render failures.
+    Never raises — empty list when nothing usable.
+    """
+    urls = extract_urls(message)[:limit]
+    out: list[dict[str, str]] = []
+    for url in urls:
+        fetched_url, text = _fetch(url)
+        if text.startswith("[fetch error") or text.startswith("[skipped"):
+            out.append({"url": fetched_url, "text": "", "error": text.strip("[]")})
+            continue
+        out.append({"url": fetched_url, "text": text[:MAX_BYTES_PER_FETCHED_URL], "error": ""})
+    return out
+
+
+def augment_user_message_with_fetches(message: str, fetched: list[dict[str, str]]) -> str:
+    """Append fetched-URL bodies to a user message in a Claude-readable shape.
+    The original message is preserved verbatim so the transcript stored in the
+    DB still matches what the user typed; only the in-flight content sent to
+    Claude grows.
+    """
+    if not fetched:
+        return message
+    blocks = []
+    for entry in fetched:
+        if entry.get("error"):
+            blocks.append(f"<fetched url=\"{entry['url']}\" error=\"{entry['error']}\" />")
+            continue
+        blocks.append(
+            f"<fetched url=\"{entry['url']}\">\n{entry['text']}\n</fetched>"
+        )
+    return message + "\n\n" + "\n\n".join(blocks)
+
+
 def call_claude(system: str, messages: list[dict[str, str]], model: str = "claude-sonnet-4-6",
                 max_tokens: int = 1200, temperature: float = 0.4) -> str:
     """One Claude turn. messages = [{role: 'user'/'assistant', content: ...}, ...]."""
@@ -291,7 +355,16 @@ def call_claude(system: str, messages: list[dict[str, str]], model: str = "claud
             "model": model,
             "max_tokens": max_tokens,
             "temperature": temperature,
-            "system": system,
+            # The interview system prompt embeds the crawled brand context and
+            # repeats verbatim across every turn of the chat (and across the
+            # brief-generation finalize call, which uses a different but also
+            # stable system). Cache so a 7-turn chat pays full input price
+            # only on the first turn.
+            "system": [{
+                "type": "text",
+                "text": system,
+                "cache_control": {"type": "ephemeral"},
+            }],
             "messages": messages,
         },
         timeout=90,

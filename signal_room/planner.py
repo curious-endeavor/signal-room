@@ -146,7 +146,13 @@ def _ask_claude(system: str, user: str, api_key: str, model: str, max_retries: i
                 "model": model,
                 "max_tokens": 1500,
                 "temperature": 0.2,
-                "system": system,
+                # System prompt embeds the full brief and is identical across
+                # every discovery_query planned in a run. Cache it.
+                "system": [{
+                    "type": "text",
+                    "text": system,
+                    "cache_control": {"type": "ephemeral"},
+                }],
                 "messages": [{"role": "user", "content": user}],
             },
             timeout=90,

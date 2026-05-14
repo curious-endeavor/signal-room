@@ -219,7 +219,15 @@ def _ask_claude(system_prompt: str, user: str, api_key: str, model: str, max_ret
                 "model": model,
                 "max_tokens": 600,
                 "temperature": 0.2,
-                "system": system_prompt,
+                # The system prompt is the entire brief + scoring rubric and is
+                # identical across every item in this run. Mark it cacheable so
+                # only the first call pays full input price; the rest hit the
+                # 5-minute ephemeral cache at ~10% of input cost.
+                "system": [{
+                    "type": "text",
+                    "text": system_prompt,
+                    "cache_control": {"type": "ephemeral"},
+                }],
                 "messages": [{"role": "user", "content": user}],
             },
             timeout=90,
@@ -231,7 +239,19 @@ def _ask_claude(system_prompt: str, user: str, api_key: str, model: str, max_ret
             backoff = min(backoff * 2, 60)
             continue
         r.raise_for_status()
-        text = r.json()["content"][0]["text"].strip()
+        payload = r.json()
+        # Track cache hit-rate so we can verify ephemeral caching is actually
+        # paying off across a run. usage["cache_read_input_tokens"] should be
+        # ~brief_prompt_size for every call after the first within 5 minutes.
+        usage = payload.get("usage") or {}
+        if usage.get("cache_read_input_tokens") or usage.get("cache_creation_input_tokens"):
+            tracer.record("llm_cache_usage", {
+                "input_tokens": usage.get("input_tokens"),
+                "cache_creation_input_tokens": usage.get("cache_creation_input_tokens"),
+                "cache_read_input_tokens": usage.get("cache_read_input_tokens"),
+                "output_tokens": usage.get("output_tokens"),
+            })
+        text = payload["content"][0]["text"].strip()
         break
     else:
         raise RuntimeError(f"max retries exceeded")
@@ -280,8 +300,10 @@ def score_items_with_brief(
             f"Return the JSON decision."
         )
 
-        if i > 1:
-            time.sleep(2)  # gentle pacing between calls
+        # No inter-item sleep: _ask_claude already handles 429s with
+        # retry-after + exponential backoff, and a fixed pause here just
+        # padded the run past the 5-minute prompt-cache TTL, defeating the
+        # cache. If you ever hit a tier ceiling, raise it in the handler.
         claude_response_raw = None
         error_msg = None
         try:

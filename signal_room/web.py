@@ -504,6 +504,16 @@ async def onboarding_chat(brand: str, request: Request, body: dict = None) -> JS
     history = [{"role": m["role"], "content": m["content"]} for m in messages if m["role"] in ("user", "assistant")]
 
     from . import onboarding as _onb
+    # If the user pasted URLs in this turn, fetch them server-side and inline
+    # the stripped text into the latest user message before calling Claude.
+    # The stored transcript keeps the original message verbatim; only the
+    # in-flight history Claude sees gets the <fetched> blocks appended.
+    fetched = _onb.fetch_urls_for_chat(user_msg)
+    if fetched and history and history[-1].get("role") == "user":
+        history[-1] = {
+            "role": "user",
+            "content": _onb.augment_user_message_with_fetches(history[-1]["content"], fetched),
+        }
     try:
         assistant_msg = _onb.next_assistant_turn(
             brand_row.get("name") or brand,
@@ -618,36 +628,103 @@ def _mirror_brief_to_yaml(brand: str, brief: dict) -> None:
     (brand_dir / "brief.yaml").write_text(_yaml.safe_dump(wrapped, sort_keys=False, allow_unicode=True), encoding="utf-8")
 
 
+def _load_brief_from_disk(brand: str) -> dict:
+    """Read config/brands/<brand>/brief.yaml and flatten the projection envelope
+    into the shape the editor template expects. Returns {} if the file is
+    missing or unparseable.
+
+    Disk YAML has:
+      brand: {name, slug, url, one_liner, audience}
+      projection: {signal_room: {pillars, discovery_queries, seed_sources}}
+
+    Editor template expects:
+      {name, url, one_liner, audience, pillars, discovery_queries, seed_sources}
+    """
+    import yaml as _yaml
+    brief_path = ROOT / "config" / "brands" / brand / "brief.yaml"
+    if not brief_path.exists():
+        return {}
+    try:
+        raw = _yaml.safe_load(brief_path.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return {}
+    brand_block = raw.get("brand") or {}
+    sr = ((raw.get("projection") or {}).get("signal_room") or {})
+    return {
+        "name": brand_block.get("name") or brand,
+        "url": brand_block.get("url", ""),
+        "one_liner": brand_block.get("one_liner", ""),
+        "audience": brand_block.get("audience", []),
+        "pillars": sr.get("pillars", []),
+        "discovery_queries": sr.get("discovery_queries", []),
+        "seed_sources": sr.get("seed_sources", []),
+    }
+
+
+def _resolve_brief_for_editor(brand: str) -> tuple[dict, dict, str]:
+    """Return (brand_row_or_synth, brief, source). DB wins when populated;
+    otherwise fall back to disk YAML. `source` is "db" or "disk" or "empty".
+
+    For filesystem-only brands we synthesize a brand_row-shaped dict so the
+    template + auth code don't crash on missing keys.
+    """
+    row = store.get_brand(brand) or {}
+    db_brief = row.get("brief_json") or {}
+    if db_brief.get("pillars") or db_brief.get("discovery_queries"):
+        return row, db_brief, "db"
+    disk_brief = _load_brief_from_disk(brand)
+    if disk_brief.get("pillars") or disk_brief.get("discovery_queries"):
+        synth = row or {"slug": brand, "name": disk_brief.get("name") or brand,
+                        "url": disk_brief.get("url", ""), "passcode_hash": "",
+                        "passcode_session_token": ""}
+        return synth, disk_brief, "disk"
+    # Nothing yet — surface an empty editor seeded with whatever the DB knows.
+    synth = row or {"slug": brand, "name": brand, "url": "",
+                    "passcode_hash": "", "passcode_session_token": ""}
+    return synth, db_brief or {"name": brand, "url": row.get("url", "")}, "empty"
+
+
+def _auth_gate_for_brief_editor(request: Request, brand_row: dict, brand: str) -> None:
+    """Filesystem-only brands have no passcode_hash — they're committed in the
+    repo, so anyone with repo access already has the data. Skip the gate when
+    no passcode is configured. Otherwise enforce the normal flow.
+    """
+    if not (brand_row.get("passcode_hash") or "").strip():
+        return
+    from . import auth as _auth
+    _auth.require_passcode_or_redirect(request, brand_row, next_path=f"/{brand}/brief")
+
+
 @app.get("/{brand}/brief")
 def brief_editor_get(request: Request, brand: str) -> Any:
     _allowed_brand(brand)
-    brand_row = store.get_brand(brand)
-    if not brand_row:
-        raise HTTPException(status_code=404)
-    from . import auth as _auth
-    _auth.require_passcode_or_redirect(request, brand_row, next_path=f"/{brand}/brief")
+    brand_row, brief, source = _resolve_brief_for_editor(brand)
+    _auth_gate_for_brief_editor(request, brand_row, brand)
     return templates.TemplateResponse(
         request, "brief_editor.html",
-        {"brand": brand, "brand_row": brand_row, "brief": brand_row.get("brief_json") or {}, "errors": {}, "saved": False},
+        {"brand": brand, "brand_row": brand_row, "brief": brief,
+         "brief_source": source, "errors": {}, "saved": False},
     )
 
 
 @app.post("/{brand}/brief")
 async def brief_editor_post(request: Request, brand: str) -> Any:
     _allowed_brand(brand)
-    brand_row = store.get_brand(brand)
-    if not brand_row:
-        raise HTTPException(status_code=404)
-    from . import auth as _auth
-    _auth.require_passcode_or_redirect(request, brand_row, next_path=f"/{brand}/brief")
+    brand_row, current_brief, _source = _resolve_brief_for_editor(brand)
+    _auth_gate_for_brief_editor(request, brand_row, brand)
     form = await request.form()
-    brief = _parse_brief_form(form, fallback=brand_row.get("brief_json") or {})
-    store.update_brand_brief(brand, brief)
-    store.update_brand_name(brand, brief.get("name", brand))
+    brief = _parse_brief_form(form, fallback=current_brief)
+    # Persist to DB when a row exists; always mirror to disk so the worker +
+    # planner CLIs stay in sync. For filesystem-only brands, disk is canonical.
+    if store.get_brand(brand):
+        store.update_brand_brief(brand, brief)
+        store.update_brand_name(brand, brief.get("name", brand))
     _mirror_brief_to_yaml(brand, brief)
     return templates.TemplateResponse(
         request, "brief_editor.html",
-        {"brand": brand, "brand_row": store.get_brand(brand), "brief": brief, "errors": {}, "saved": True},
+        {"brand": brand, "brand_row": store.get_brand(brand) or brand_row,
+         "brief": brief, "brief_source": "db" if store.get_brand(brand) else "disk",
+         "errors": {}, "saved": True},
     )
 
 
