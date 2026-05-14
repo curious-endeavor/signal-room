@@ -223,6 +223,74 @@ projection:
           - ai agent enterprise rollout
           - voice ai customer
 
+      - id: P6
+        name: Child AI safety (3-month thought-leadership push)
+        why: >
+          Priority-1 campaign pillar. Goal: position Alice as the authority
+          on child AI safety to drive top-of-funnel for WonderSuite and
+          Alice Labs. Success = PR placements, conference invites, inbound
+          follow-ups from companies and experts. Failure = silence. Track
+          chatbot-for-minors incidents, COPPA/KOSA enforcement, age-gating
+          fights, gaming-platform AI safety, AI toys / kids-companion bots.
+          Subjects: gaming (Roblox, Character AI, Discord, Twitch) and
+          toys (smart toys, AI plush, kid-targeted chatbots). 3-month
+          sprint — every signal here is a potential pitch or speaking peg.
+        keywords:
+          - ai child safety
+          - chatbot minors
+          - generative ai children
+          - gaming ai safety
+          - character ai minors
+          - roblox ai safety
+          - discord ai minors
+          - ai toy chatbot
+          - smart toy ai
+          - kids online safety act
+          - kosa ai
+          - coppa ai chatbot
+          - ai grooming minors
+          - age verification ai
+          - child ai chatbot lawsuit
+          - teen suicide chatbot
+          - ai companion minor
+
+      - id: P7
+        name: AI bias (3-month thought-leadership push)
+        why: >
+          Priority-1 campaign pillar. Goal: position Alice as the authority
+          on AI bias to drive top-of-funnel for WonderSuite and Alice Labs.
+          Success = PR placements, speaking slots, inbound from regulators,
+          enterprise buyers, and researchers. Track bias incidents,
+          algorithmic-discrimination lawsuits, fair-lending enforcement,
+          regulator action, and bias-audit research. Subjects: healthcare
+          (diagnostic / clinical-decision AI), financial (credit scoring,
+          underwriting, lending), legal (sentencing, predictive policing,
+          legal-research AI), and content creators (moderation /
+          recommendation bias affecting creator reach). 3-month sprint.
+        keywords:
+          - ai bias
+          - algorithmic bias
+          - ai discrimination lawsuit
+          - generative ai bias
+          - llm bias evaluation
+          - bias audit ai
+          - ai fairness
+          - ai bias healthcare
+          - clinical ai bias
+          - diagnostic ai disparity
+          - credit scoring ai bias
+          - fair lending ai
+          - underwriting algorithm bias
+          - ai redlining
+          - ai bias legal
+          - predictive policing bias
+          - sentencing algorithm bias
+          - content moderation bias
+          - creator algorithm bias
+          - recommendation bias creators
+          - eeoc ai bias
+          - cfpb ai
+
     discovery_queries:
       - id: brand-chatbot-incidents
         priority: 1
@@ -252,6 +320,61 @@ projection:
           Enterprise-security incumbents that Tomer flagged as Alice's
           true product-side competitors. When they ship AI features, that's
           direct competitive signal.
+
+      - id: child-safety-gaming-ai
+        priority: 1
+        topic: AI safety children gaming chatbot Roblox Character AI Discord minors 2026
+        why: >
+          P6 thought-leadership campaign. Every gaming-platform AI-minors
+          incident is a PR / speaking peg for Alice's child-safety push.
+
+      - id: child-safety-ai-toys
+        priority: 1
+        topic: AI toys children smart toy chatbot kids companion generative AI 2026
+        why: >
+          P6 campaign. AI toys and kids-companion bots are the second
+          subject lane — track product launches, regulator scrutiny,
+          parent backlash, and incidents.
+
+      - id: child-safety-kosa-coppa-ai
+        priority: 1
+        topic: Kids Online Safety Act COPPA AI chatbot minors enforcement 2026
+        why: >
+          P6 regulatory signal. KOSA / COPPA enforcement against AI
+          chatbots gives Alice the policy-credibility lane for the
+          child-safety pitch.
+
+      - id: bias-healthcare-ai
+        priority: 1
+        topic: AI bias healthcare diagnostic clinical decision algorithm disparity 2026
+        why: >
+          P7 campaign. Healthcare AI bias incidents and research are the
+          first vertical lane — case studies, regulator action, and
+          published audits.
+
+      - id: bias-credit-scoring-ai
+        priority: 1
+        topic: credit scoring AI bias fair lending algorithm discrimination CFPB 2026
+        why: >
+          P7 campaign. Financial / credit-scoring bias is the second
+          vertical lane — CFPB action, ECOA / fair-lending suits, and
+          fintech audits.
+
+      - id: bias-legal-ai
+        priority: 1
+        topic: AI bias legal sentencing predictive policing court algorithm 2026
+        why: >
+          P7 campaign. Legal-AI bias (sentencing, predictive policing,
+          legal-research bots) — track court rulings, ACLU / civil-rights
+          filings, and academic audits.
+
+      - id: bias-content-creators-ai
+        priority: 1
+        topic: generative AI bias content moderation creators recommendation algorithm 2026
+        why: >
+          P7 campaign. Creator-facing bias — moderation false positives,
+          recommendation suppression, demonetization disputes — gives
+          Alice a culture-press lane parallel to the regulatory one.
 
       - id: data-generalists-encroach-safety
         priority: 2

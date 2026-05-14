@@ -8,10 +8,52 @@
       "why": "Competitive radar. Track every direct competitor move (Lakera, Robust Intelligence, Protect AI, HiddenLayer, etc.).\n"
     },
     {
+      "id": "bias-content-creators-ai",
+      "priority": 1,
+      "topic": "generative AI bias content moderation creators recommendation algorithm 2026",
+      "why": "P7 campaign. Creator-facing bias — moderation false positives, recommendation suppression, demonetization disputes — gives Alice a culture-press lane parallel to the regulatory one.\n"
+    },
+    {
+      "id": "bias-credit-scoring-ai",
+      "priority": 1,
+      "topic": "credit scoring AI bias fair lending algorithm discrimination CFPB 2026",
+      "why": "P7 campaign. Financial / credit-scoring bias is the second vertical lane — CFPB action, ECOA / fair-lending suits, and fintech audits.\n"
+    },
+    {
+      "id": "bias-healthcare-ai",
+      "priority": 1,
+      "topic": "AI bias healthcare diagnostic clinical decision algorithm disparity 2026",
+      "why": "P7 campaign. Healthcare AI bias incidents and research are the first vertical lane — case studies, regulator action, and published audits.\n"
+    },
+    {
+      "id": "bias-legal-ai",
+      "priority": 1,
+      "topic": "AI bias legal sentencing predictive policing court algorithm 2026",
+      "why": "P7 campaign. Legal-AI bias (sentencing, predictive policing, legal-research bots) — track court rulings, ACLU / civil-rights filings, and academic audits.\n"
+    },
+    {
       "id": "brand-chatbot-incidents",
       "priority": 1,
       "topic": "brand chatbot fail lawsuit customer harm 2026 OR sycophancy hallucination customer service AI",
-      "why": "Primary news peg for Alice's John Oliver-style narrative \u2014 every brand chatbot incident is a fresh story to ride.\n"
+      "why": "Primary news peg for Alice's John Oliver-style narrative — every brand chatbot incident is a fresh story to ride.\n"
+    },
+    {
+      "id": "child-safety-ai-toys",
+      "priority": 1,
+      "topic": "AI toys children smart toy chatbot kids companion generative AI 2026",
+      "why": "P6 campaign. AI toys and kids-companion bots are the second subject lane — track product launches, regulator scrutiny, parent backlash, and incidents.\n"
+    },
+    {
+      "id": "child-safety-gaming-ai",
+      "priority": 1,
+      "topic": "AI safety children gaming chatbot Roblox Character AI Discord minors 2026",
+      "why": "P6 thought-leadership campaign. Every gaming-platform AI-minors incident is a PR / speaking peg for Alice's child-safety push.\n"
+    },
+    {
+      "id": "child-safety-kosa-coppa-ai",
+      "priority": 1,
+      "topic": "Kids Online Safety Act COPPA AI chatbot minors enforcement 2026",
+      "why": "P6 regulatory signal. KOSA / COPPA enforcement against AI chatbots gives Alice the policy-credibility lane for the child-safety pitch.\n"
     },
     {
       "id": "eu-ai-act-enforcement",
@@ -35,7 +77,7 @@
       "id": "ab1988-consumer-ai-state-law",
       "priority": 2,
       "topic": "AB 1988 California AI chatbot disclosure consumer state law 2026",
-      "why": "US state-level AI consumer protection \u2014 direct relevance to customer-facing-AI buyers. Liability angle for the CISO pitch.\n"
+      "why": "US state-level AI consumer protection — direct relevance to customer-facing-AI buyers. Liability angle for the CISO pitch.\n"
     },
     {
       "id": "data-generalists-encroach-safety",
@@ -65,13 +107,13 @@
       "id": "ai-agent-security-vulnerabilities",
       "priority": 3,
       "topic": "AI agent security vulnerability tool use indirect prompt injection 2026",
-      "why": "The agentic-AI security lane \u2014 Alice's \"AgenticVerse\" angle.\n"
+      "why": "The agentic-AI security lane — Alice's \"AgenticVerse\" angle.\n"
     },
     {
       "id": "anthropic-deepmind-safety-research",
       "priority": 3,
       "topic": "Anthropic interpretability OR DeepMind alignment safety research paper 2026",
-      "why": "Brand benchmark \u2014 Anthropic's research-as-content model is Alice's reference. Surfaces tone and content patterns to learn from.\n"
+      "why": "Brand benchmark — Anthropic's research-as-content model is Alice's reference. Surfaces tone and content patterns to learn from.\n"
     }
   ]
 }
