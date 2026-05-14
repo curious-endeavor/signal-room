@@ -69,22 +69,26 @@ def run_forever(poll_seconds: int = 5) -> None:
 
     # Self-heal orphaned runs: if the previous worker was killed mid-execution
     # (Render redeploy, OOM, crash), its `status='running'` rows survive in
-    # the DB and permanently block `claim_next_brand_run` for that brand
+    # brand_runs and permanently block `claim_next_brand_run` for that brand
     # (which skips brands with any in-flight sibling). On every fresh boot
     # we are the only worker, so any row still marked running is by
     # definition orphaned — flip them to failed with a clear reason.
+    #
+    # Note: must use `mark_brand_run_failed` here, not `mark_run_status`.
+    # `mark_run_status` targets the legacy `runs` (search-runs) table, not
+    # `brand_runs`, so the previous version of this code silently no-op'd.
     try:
         orphans = store.fetchall(
             "select id, brand from brand_runs where status = ?", ("running",)
         )
         for row in orphans:
-            store.mark_run_status(
-                row["id"], "failed",
+            store.mark_brand_run_failed(
+                row["id"],
                 error="Abandoned by previous worker (process restart). Re-queue to retry.",
             )
         if orphans:
             print(
-                f"[worker] cleared {len(orphans)} orphaned running row(s): "
+                f"[worker] cleared {len(orphans)} orphaned brand_run(s): "
                 + ", ".join(f"{r['brand']}/{r['id']}" for r in orphans),
                 flush=True,
             )
