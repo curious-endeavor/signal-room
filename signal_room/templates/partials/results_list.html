@@ -48,7 +48,7 @@
     {% else %}
       <div>
         <strong>Searching</strong>
-        <p>Fetching sources and scoring results. All-source searches can take several minutes.</p>
+        <p>Fetching sources and ranking results by social traction. All-source searches can take several minutes.</p>
       </div>
     {% endif %}
   </section>
@@ -71,7 +71,10 @@
   </section>
 {% endif %}
 
-<section class="results-list" aria-label="Search results">
+<section class="results-list" aria-label="Social traction results">
+  {% if date_groups %}
+    <h2 class="result-section-title">Social traction</h2>
+  {% endif %}
   {% for group in date_groups %}
     <section class="date-group" aria-label="{{ group.label }}">
       <h2 class="date-heading">{{ group.label }}</h2>
@@ -79,18 +82,15 @@
         <article class="result-row" data-item-id="{{ item.id }}">
           <div class="result-topline">
             <a class="result-title" href="{{ item.source_url }}" target="_blank" rel="noreferrer" {% if item.original_title %}title="{{ item.original_title }}"{% endif %}>{{ item.title }}</a>
-            <span class="score">{{ "%.0f"|format(item.score) }}</span>
           </div>
           <div class="source-line">
             <span>{{ item.display_source or item.source }}</span>
             <span>{{ item.display_date or item.date }}</span>
-            <span>{{ item.pillar or (item.pillar_fit[0] if item.pillar_fit else "Unsorted") }}</span>
             {% if item.traction_label %}
               <span>{{ item.traction_label }}</span>
             {% endif %}
           </div>
           <p class="summary">{{ item.summary_html | safe }}</p>
-          <p class="angle"><strong>CE angle</strong> {{ item.suggested_ce_angle }}</p>
           <div class="result-actions">
             <form class="js-action-form" action="/create-content" data-api-action="/api/create-content" method="post">
               <input type="hidden" name="run_id" value="{{ run.id }}">
@@ -108,3 +108,38 @@
     </section>
   {% endfor %}
 </section>
+
+{% if reference_groups %}
+  <section class="results-list references-list" aria-label="Reference results">
+    <h2 class="result-section-title">References</h2>
+    {% for group in reference_groups %}
+      <section class="date-group" aria-label="References {{ group.label }}">
+        <h2 class="date-heading">{{ group.label }}</h2>
+        {% for item in group.rows %}
+          <article class="result-row is-reference" data-item-id="{{ item.id }}">
+            <div class="result-topline">
+              <a class="result-title" href="{{ item.source_url }}" target="_blank" rel="noreferrer" {% if item.original_title %}title="{{ item.original_title }}"{% endif %}>{{ item.title }}</a>
+            </div>
+            <div class="source-line">
+              <span>{{ item.display_source or item.source }}</span>
+              <span>{{ item.display_date or item.date }}</span>
+            </div>
+            <p class="summary">{{ item.summary_html | safe }}</p>
+            <div class="result-actions">
+              <form class="js-action-form" action="/create-content" data-api-action="/api/create-content" method="post">
+                <input type="hidden" name="run_id" value="{{ run.id }}">
+                <input type="hidden" name="item_id" value="{{ item.id }}">
+                <button type="submit">Create Content</button>
+              </form>
+              <form class="js-action-form" action="/feedback" data-api-action="/api/feedback" method="post">
+                <input type="hidden" name="run_id" value="{{ run.id }}">
+                <input type="hidden" name="item_id" value="{{ item.id }}">
+                <button class="icon-button" type="submit" aria-label="Thumbs down">Thumbs down</button>
+              </form>
+            </div>
+          </article>
+        {% endfor %}
+      </section>
+    {% endfor %}
+  </section>
+{% endif %}
